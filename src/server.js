@@ -195,8 +195,8 @@ if (HEARTBEAT_INTERVAL_MS > 0) {
   wss.on("close", () => clearInterval(heartbeatInterval));
 }
 
-ws.on("connection", (ws, req) => {
-  ws.isAlive = true; // initial state for heartbeat
+wss.on("connection", (socket, req) => {
+  socket.isAlive = true; // initial state for heartbeat
   let lastActivity = Date.now();
   const clientAddress = getClientAddress(req);
 
@@ -205,7 +205,7 @@ ws.on("connection", (ws, req) => {
   if (!isOriginAllowed(origin)) {
     console.warn("Closing connection due to disallowed origin", origin);
     try {
-      ws.close(4003, "Origin not allowed");
+      socket.close(4003, "Origin not allowed");
     } catch (_) {}
     return;
   }
@@ -217,13 +217,13 @@ ws.on("connection", (ws, req) => {
   );
 
   // Proof-of-life updates
-  ws.on("pong", () => {
-    ws.isAlive = true;
+  socket.on("pong", () => {
+    socket.isAlive = true;
     lastActivity = Date.now();
   });
 
   // Send a welcome message
-  sendJson(ws, {
+  sendJson(socket, {
     type: "welcome",
     message: "Connected to broadcast server",
     time: Date.now(),
@@ -233,8 +233,8 @@ ws.on("connection", (ws, req) => {
   if (IDLE_TIMEOUT_MS > 0) {
     const idleCheck = () => {
       if (Date.now() - lastActivity > IDLE_TIMEOUT_MS)
-        return ws.close(4000, "Idle timeout");
-      if (ws.readyState === ws.OPEN)
+        return socket.close(4000, "Idle timeout");
+      if (socket.readyState === socket.OPEN)
         setTimeout(idleCheck, Math.max(5000, IDLE_TIMEOUT_MS / 2));
     };
     setTimeout(idleCheck, Math.max(5000, IDLE_TIMEOUT_MS / 2));
@@ -243,13 +243,13 @@ ws.on("connection", (ws, req) => {
   // Max connection age enforcement if enabled
   if (MAX_CONN_AGE_MS > 0) {
     setTimeout(() => {
-      if (ws.readyState === ws.OPEN)
-        ws.close(4001, "Max connection age reached");
+      if (socket.readyState === socket.OPEN)
+        socket.close(4001, "Max connection age reached");
     }, MAX_CONN_AGE_MS);
   }
 
   // Whenever you process a real message, update activity time
-  ws.on("message", (data, isBinary) => {
+  socket.on("message", (data, isBinary) => {
     lastActivity = Date.now();
     // Accept text or binary but expect JSON when text
     if (isBinary) {
@@ -261,13 +261,16 @@ ws.on("connection", (ws, req) => {
     try {
       payload = JSON.parse(data.toString());
     } catch (err) {
-      sendJson(ws, { type: "error", error: "Invalid JSON payload" });
+      sendJson(socket, { type: "error", error: "Invalid JSON payload" });
       return;
     }
 
     // Basic validation (ensure object)
     if (typeof payload !== "object" || payload === null) {
-      sendJson(ws, { type: "error", error: "Payload must be a JSON object" });
+      sendJson(socket, {
+        type: "error",
+        error: "Payload must be a JSON object",
+      });
       return;
     }
 
@@ -280,13 +283,13 @@ ws.on("connection", (ws, req) => {
 
     // Broadcast to all other connected clients
     wss.clients.forEach((client) => {
-      if (client !== ws && client.readyState === client.OPEN) {
+      if (client !== socket && client.readyState === client.OPEN) {
         sendJson(client, enriched);
       }
     });
   });
 
-  ws.on("close", (code, reason) => {
+  socket.on("close", (code, reason) => {
     console.log(
       "Client disconnected",
       clientAddress,
@@ -297,7 +300,7 @@ ws.on("connection", (ws, req) => {
     );
   });
 
-  ws.on("error", (err) => {
+  socket.on("error", (err) => {
     console.error("WebSocket error from", clientAddress, err);
   });
 });
