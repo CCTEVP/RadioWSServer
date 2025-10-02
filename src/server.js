@@ -72,39 +72,50 @@ const server = http.createServer((req, res) => {
         return;
       }
 
-      // Basic shape validation
-      const valid =
+      // Mandatory fields validation: type, timestamp, data
+      const errors = [];
+      if (!body || typeof body !== "object")
+        errors.push("Body must be a JSON object");
+      if (!("type" in body)) errors.push("Missing field: type");
+      if (!("timestamp" in body)) errors.push("Missing field: timestamp");
+      if (!("data" in body)) errors.push("Missing field: data");
+
+      if (body && typeof body.type !== "string")
+        errors.push("Field type must be a string");
+      if (body && typeof body.timestamp === "string") {
+        if (isNaN(Date.parse(body.timestamp)))
+          errors.push("timestamp must be an ISO-8601 date string");
+      } else if (body) {
+        errors.push("timestamp must be a string");
+      }
+      if (
         body &&
-        typeof body === "object" &&
-        body.type &&
-        body.timestamp &&
-        body.data;
-      if (!valid) {
+        (typeof body.data !== "object" ||
+          body.data === null ||
+          Array.isArray(body.data))
+      ) {
+        errors.push("data must be a non-null JSON object");
+      }
+
+      if (errors.length) {
         res.writeHead(422, { "Content-Type": "application/json" });
         res.end(
-          JSON.stringify({
-            error: "Missing required fields: type, timestamp, data",
-          })
+          JSON.stringify({ error: "Validation failed", details: errors })
         );
         return;
       }
 
-      // Additional optional validation for provided example fields
-      // (Could be expanded or replaced with a JSON schema later.)
-      const enriched = {
-        type: "content",
-        originalType: body.type,
-        timestamp: body.timestamp,
+      // Attach server receipt timestamp; otherwise broadcast the payload as-is per requirement
+      const broadcastPayload = {
+        ...body,
         serverReceivedAt: new Date().toISOString(),
-        data: body.data,
       };
 
-      // Broadcast to connected WebSocket clients
       let delivered = 0;
       wss.clients.forEach((client) => {
         if (client.readyState === client.OPEN) {
           delivered++;
-          sendJson(client, enriched);
+          sendJson(client, broadcastPayload);
         }
       });
 
@@ -112,7 +123,9 @@ const server = http.createServer((req, res) => {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*",
       });
-      res.end(JSON.stringify({ status: "ok", delivered, echo: enriched }));
+      res.end(
+        JSON.stringify({ status: "ok", delivered, echo: broadcastPayload })
+      );
     });
     return;
   }
