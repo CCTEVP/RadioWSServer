@@ -21,13 +21,105 @@ const PUBLIC_BASE_URL = (
 
 // Basic HTTP server (optional for health check / upgrade flexibility)
 const server = http.createServer((req, res) => {
-  if (req.url === "/health") {
+  // Simple router
+  if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok" }));
+    res.end(
+      JSON.stringify({
+        status: "ok",
+        uptime: process.uptime(),
+        clients: wss?.clients?.size || 0,
+      })
+    );
     return;
   }
-  res.writeHead(404);
-  res.end();
+
+  // Preflight for /postcontent (basic CORS allowance if needed from browsers)
+  if (req.method === "OPTIONS" && req.url === "/postcontent") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    });
+    res.end();
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/postcontent") {
+    const MAX_POST_BYTES = parseInt(
+      process.env.POST_CONTENT_MAX_BYTES || "262144",
+      10
+    ); // 256KB default
+    let raw = "";
+    let received = 0;
+    req.on("data", (chunk) => {
+      received += chunk.length;
+      if (received > MAX_POST_BYTES) {
+        res.writeHead(413, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Payload too large" }));
+        req.destroy();
+        return;
+      }
+      raw += chunk;
+    });
+    req.on("end", () => {
+      let body;
+      try {
+        body = JSON.parse(raw || "{}");
+      } catch (_) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid JSON" }));
+        return;
+      }
+
+      // Basic shape validation
+      const valid =
+        body &&
+        typeof body === "object" &&
+        body.type &&
+        body.timestamp &&
+        body.data;
+      if (!valid) {
+        res.writeHead(422, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: "Missing required fields: type, timestamp, data",
+          })
+        );
+        return;
+      }
+
+      // Additional optional validation for provided example fields
+      // (Could be expanded or replaced with a JSON schema later.)
+      const enriched = {
+        type: "content",
+        originalType: body.type,
+        timestamp: body.timestamp,
+        serverReceivedAt: new Date().toISOString(),
+        data: body.data,
+      };
+
+      // Broadcast to connected WebSocket clients
+      let delivered = 0;
+      wss.clients.forEach((client) => {
+        if (client.readyState === client.OPEN) {
+          delivered++;
+          sendJson(client, enriched);
+        }
+      });
+
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(JSON.stringify({ status: "ok", delivered, echo: enriched }));
+    });
+    return;
+  }
+
+  // Fallback 404
+  res.writeHead(404, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ error: "Not found" }));
 });
 
 // Optional origin allowlist (comma separated). If unset, all origins allowed.
