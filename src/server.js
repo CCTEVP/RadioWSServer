@@ -151,7 +151,7 @@ const MAX_PAYLOAD_BYTES = parseInt(
 // other clients. They will be treated as internal control messages. Default
 // suppresses keepalive messages (case-insensitive). Example to add more:
 // PowerShell: $env:SUPPRESSED_TYPES='keepalive,typing'
-const SUPPRESSED_TYPES = (process.env.SUPPRESSED_TYPES || "keepalive")
+const SUPPRESSED_TYPES = (process.env.SUPPRESSED_TYPES || "keepalive,ack")
   .split(",")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
