@@ -147,6 +147,15 @@ const MAX_PAYLOAD_BYTES = parseInt(
   10
 );
 
+// Comma-separated list of message .type values that should NOT be broadcast to
+// other clients. They will be treated as internal control messages. Default
+// suppresses keepalive messages (case-insensitive). Example to add more:
+// PowerShell: $env:SUPPRESSED_TYPES='keepalive,typing'
+const SUPPRESSED_TYPES = (process.env.SUPPRESSED_TYPES || "keepalive")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
 const wss = new WebSocketServer({ server, maxPayload: MAX_PAYLOAD_BYTES });
 // Extract client address (respect Cloud Run / proxy headers)
 function getClientAddress(req) {
@@ -280,6 +289,24 @@ wss.on("connection", (socket, req) => {
       receivedAt: Date.now(),
       data: payload,
     };
+
+    // Suppress internal/control message types from being broadcast. This
+    // allows clients to send periodic {type:"keepalive"} (or other configured
+    // types) without spamming all connected peers. We still update lastActivity
+    // above so idle timeout logic is satisfied.
+    const payloadType =
+      payload && typeof payload.type === "string"
+        ? payload.type.toLowerCase()
+        : null;
+    if (payloadType && SUPPRESSED_TYPES.includes(payloadType)) {
+      // Optionally acknowledge only to the sender so they know the server saw it.
+      sendJson(socket, {
+        type: "ack",
+        ackType: payload.type,
+        receivedAt: Date.now(),
+      });
+      return; // Do NOT broadcast further
+    }
 
     // Broadcast to all other connected clients
     wss.clients.forEach((client) => {
