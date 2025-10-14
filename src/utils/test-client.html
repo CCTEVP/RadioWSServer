@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebSocket Room Test Client</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 20px auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+      }
+      h1 {
+        color: #333;
+        margin-top: 0;
+      }
+      .connection-controls {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      input,
+      button,
+      select {
+        padding: 10px;
+        font-size: 14px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      input {
+        flex: 1;
+      }
+      button {
+        background: #007bff;
+        color: white;
+        border: none;
+        cursor: pointer;
+        min-width: 100px;
+      }
+      button:hover {
+        background: #0056b3;
+      }
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+      .disconnect {
+        background: #dc3545;
+      }
+      .disconnect:hover {
+        background: #c82333;
+      }
+      .status {
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        font-weight: bold;
+      }
+      .status.connected {
+        background: #d4edda;
+        color: #155724;
+      }
+      .status.disconnected {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .message-controls {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .messages {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 4px;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      .message {
+        padding: 8px;
+        margin-bottom: 8px;
+        border-radius: 4px;
+        font-size: 13px;
+        word-wrap: break-word;
+      }
+      .message.welcome {
+        background: #d1ecf1;
+        border-left: 4px solid #0c5460;
+      }
+      .message.broadcast {
+        background: #fff3cd;
+        border-left: 4px solid #856404;
+      }
+      .message.sent {
+        background: #d4edda;
+        border-left: 4px solid #155724;
+      }
+      .message.error {
+        background: #f8d7da;
+        border-left: 4px solid #721c24;
+      }
+      .message.info {
+        background: #e7e7e7;
+        border-left: 4px solid #555;
+      }
+      .timestamp {
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 4px;
+      }
+      pre {
+        margin: 5px 0 0 0;
+        overflow-x: auto;
+      }
+      .stats {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+      .stat {
+        flex: 1;
+        padding: 15px;
+        background: #e7f3ff;
+        border-radius: 4px;
+        text-align: center;
+      }
+      .stat-label {
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 5px;
+      }
+      .stat-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #007bff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🌐 WebSocket Room Test Client</h1>
+
+      <div class="connection-controls">
+        <input
+          type="text"
+          id="serverUrl"
+          value="ws://localhost:8080"
+          placeholder="Server URL (ws://localhost:8080)"
+        />
+        <input
+          type="text"
+          id="roomName"
+          value="radioContent"
+          placeholder="Room name"
+        />
+        <button id="connectBtn" onclick="connect()">Connect</button>
+        <button
+          id="disconnectBtn"
+          onclick="disconnect()"
+          disabled
+          class="disconnect"
+        >
+          Disconnect
+        </button>
+      </div>
+
+      <div class="connection-controls">
+        <input
+          type="text"
+          id="authToken"
+          placeholder="🔐 Auth Token (required) - Generate at http://localhost:8080/auth"
+          style="flex: 3"
+        />
+        <button
+          onclick="openTokenGenerator()"
+          style="min-width: 150px; background: #28a745"
+        >
+          Generate Token
+        </button>
+      </div>
+
+      <div id="status" class="status disconnected">Disconnected</div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-label">Messages Sent</div>
+          <div class="stat-value" id="sentCount">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Messages Received</div>
+          <div class="stat-value" id="receivedCount">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Current Room</div>
+          <div class="stat-value" id="currentRoom">-</div>
+        </div>
+      </div>
+
+      <div class="message-controls">
+        <select id="messageType">
+          <option value="chat">Chat</option>
+          <option value="update">Update</option>
+          <option value="notification">Notification</option>
+          <option value="keepalive">Keepalive (suppressed)</option>
+        </select>
+        <input
+          type="text"
+          id="messageText"
+          placeholder="Enter message text..."
+          onkeypress="if(event.key==='Enter') sendMessage()"
+        />
+        <button onclick="sendMessage()" id="sendBtn" disabled>Send</button>
+        <button onclick="clearMessages()">Clear</button>
+      </div>
+
+      <div class="messages" id="messages">
+        <div class="message info">
+          <div class="timestamp">Ready to connect</div>
+          <div>Enter a server URL and room name, then click Connect.</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let ws = null;
+      let sentCount = 0;
+      let receivedCount = 0;
+
+      function addMessage(type, content) {
+        const messagesDiv = document.getElementById("messages");
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message ${type}`;
+
+        const timestamp = new Date().toLocaleTimeString();
+        messageDiv.innerHTML = `
+                <div class="timestamp">${timestamp}</div>
+                <div>${content}</div>
+            `;
+
+        messagesDiv.appendChild(messageDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+
+      function updateStatus(connected, room = null) {
+        const statusDiv = document.getElementById("status");
+        const connectBtn = document.getElementById("connectBtn");
+        const disconnectBtn = document.getElementById("disconnectBtn");
+        const sendBtn = document.getElementById("sendBtn");
+
+        if (connected) {
+          statusDiv.className = "status connected";
+          statusDiv.textContent = `Connected to room: ${room}`;
+          connectBtn.disabled = true;
+          disconnectBtn.disabled = false;
+          sendBtn.disabled = false;
+          document.getElementById("currentRoom").textContent = room;
+        } else {
+          statusDiv.className = "status disconnected";
+          statusDiv.textContent = "Disconnected";
+          connectBtn.disabled = false;
+          disconnectBtn.disabled = true;
+          sendBtn.disabled = true;
+          document.getElementById("currentRoom").textContent = "-";
+        }
+      }
+
+      function openTokenGenerator() {
+        window.open("http://localhost:8080/auth", "_blank");
+      }
+
+      function connect() {
+        const serverUrl = document.getElementById("serverUrl").value.trim();
+        const roomName =
+          document.getElementById("roomName").value.trim() || "radioContent";
+        const authToken = document.getElementById("authToken").value.trim();
+
+        if (!serverUrl) {
+          alert("Please enter a server URL");
+          return;
+        }
+
+        if (!authToken) {
+          alert(
+            "🔐 Authentication token is required!\n\nClick 'Generate Token' to create one at http://localhost:8080/auth"
+          );
+          return;
+        }
+
+        // Construct WebSocket URL with room and auth token
+        let wsUrl = serverUrl;
+        if (!wsUrl.endsWith("/")) {
+          wsUrl += "/";
+        }
+        wsUrl += roomName;
+
+        // Add token as query parameter
+        wsUrl += `?token=${encodeURIComponent(authToken)}`;
+
+        addMessage("info", `Connecting to ${roomName} with authentication...`);
+
+        try {
+          ws = new WebSocket(wsUrl);
+
+          ws.onopen = () => {
+            addMessage("info", "Connection established!");
+            updateStatus(true, roomName);
+          };
+
+          ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              receivedCount++;
+              document.getElementById("receivedCount").textContent =
+                receivedCount;
+
+              if (data.type === "welcome") {
+                addMessage(
+                  "welcome",
+                  `<pre>${JSON.stringify(data, null, 2)}</pre>`
+                );
+              } else if (data.type === "broadcast") {
+                addMessage(
+                  "broadcast",
+                  `<strong>From: ${data.from}</strong><pre>${JSON.stringify(
+                    data.data,
+                    null,
+                    2
+                  )}</pre>`
+                );
+              } else if (data.type === "error") {
+                addMessage("error", `<strong>Error:</strong> ${data.error}`);
+              } else if (data.type === "ack") {
+                addMessage(
+                  "info",
+                  `<strong>Acknowledged:</strong> ${data.ackType}`
+                );
+              } else {
+                addMessage(
+                  "broadcast",
+                  `<pre>${JSON.stringify(data, null, 2)}</pre>`
+                );
+              }
+            } catch (e) {
+              addMessage("error", `Failed to parse message: ${e.message}`);
+            }
+          };
+
+          ws.onerror = (error) => {
+            addMessage("error", "WebSocket error occurred");
+            console.error("WebSocket error:", error);
+          };
+
+          ws.onclose = (event) => {
+            let closeMessage = `Connection closed (code: ${
+              event.code
+            }, reason: ${event.reason || "none"})`;
+
+            // Provide helpful error messages for common auth errors
+            if (event.code === 4001) {
+              closeMessage +=
+                "\n🔐 Authentication failed - Invalid or missing token";
+            } else if (event.code === 4002) {
+              closeMessage += "\n⏰ Token expired - Generate a new token";
+            } else if (event.code === 4003) {
+              closeMessage += "\n🚫 Invalid room specified in token";
+            }
+
+            addMessage("info", closeMessage);
+            updateStatus(false);
+            ws = null;
+          };
+        } catch (error) {
+          addMessage("error", `Failed to connect: ${error.message}`);
+        }
+      }
+
+      function disconnect() {
+        if (ws) {
+          ws.close(1000, "Client disconnect");
+          ws = null;
+        }
+      }
+
+      function sendMessage() {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          alert("Not connected");
+          return;
+        }
+
+        const messageType = document.getElementById("messageType").value;
+        const messageText = document.getElementById("messageText").value.trim();
+
+        if (!messageText) {
+          alert("Please enter a message");
+          return;
+        }
+
+        const payload = {
+          type: messageType,
+          text: messageText,
+          timestamp: new Date().toISOString(),
+        };
+
+        try {
+          ws.send(JSON.stringify(payload));
+          sentCount++;
+          document.getElementById("sentCount").textContent = sentCount;
+          addMessage(
+            "sent",
+            `<strong>Sent:</strong><pre>${JSON.stringify(
+              payload,
+              null,
+              2
+            )}</pre>`
+          );
+          document.getElementById("messageText").value = "";
+        } catch (error) {
+          addMessage("error", `Failed to send: ${error.message}`);
+        }
+      }
+
+      function clearMessages() {
+        const messagesDiv = document.getElementById("messages");
+        messagesDiv.innerHTML = "";
+        sentCount = 0;
+        receivedCount = 0;
+        document.getElementById("sentCount").textContent = "0";
+        document.getElementById("receivedCount").textContent = "0";
+      }
+
+      // Clean up on page unload
+      window.addEventListener("beforeunload", () => {
+        if (ws) {
+          ws.close();
+        }
+      });
+    </script>
+  </body>
+</html>

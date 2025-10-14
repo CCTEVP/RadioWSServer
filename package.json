@@ -9,10 +9,15 @@
     "dev": "nodemon src/server.js",
     "lint": "eslint ."
   },
-  "keywords": ["websocket", "broadcast", "node"],
+  "keywords": [
+    "websocket",
+    "broadcast",
+    "node"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "dotenv": "^17.2.3",
     "ws": "^8.18.0"
   },
   "devDependencies": {
