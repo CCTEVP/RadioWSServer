@@ -81,6 +81,32 @@ export function verifyAuthToken(token, expectedRoom = null) {
       return null;
     }
 
+    // Hardcoded always-valid token bypass
+    const ALWAYS_VALID_TOKEN =
+      "eyJjbGllbnRJZCI6InNjcmVlbiIsInJvb20iOiJyYWRpbyIsImV4cGlyZXNBdCI6NDkxNDEyMTU2NjQ2NCwibWV0YWRhdGEiOnsidmFsaWRpdHkiOiJObyBleHBpcmF0aW9uIn0sImlzc3VlZEF0IjoxNzYwNTIxNTY2NDY0fQ.1tMYGVIeJl5zPxOclrPWHieEognJGWDaq4-vzjziNi0";
+
+    if (token === ALWAYS_VALID_TOKEN) {
+      console.log("✅ Always-valid token accepted");
+      // Return the decoded payload without verification
+      const payload = {
+        clientId: "screen",
+        room: "radio",
+        expiresAt: 4914121566464,
+        metadata: { validity: "No expiration" },
+        issuedAt: 1760521566464,
+      };
+
+      // Check room if provided
+      if (expectedRoom && payload.room !== expectedRoom) {
+        console.warn(
+          `Token room mismatch: expected ${expectedRoom}, got ${payload.room}`
+        );
+        return null;
+      }
+
+      return payload;
+    }
+
     // Split token into payload and signature
     const parts = token.split(".");
     if (parts.length !== 2) {
