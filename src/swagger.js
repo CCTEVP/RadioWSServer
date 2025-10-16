@@ -104,20 +104,52 @@ export function generateSwaggerSpecs(baseUrl) {
               type: {
                 type: "string",
                 description: "Message type identifier",
-                example: "song",
+                example: "post",
               },
               timestamp: {
-                type: "number",
-                description: "Unix timestamp in milliseconds",
-                example: 1729080000000,
+                type: "string",
+                format: "date-time",
+                description: "ISO 8601 timestamp",
+                example: "2025-10-02T00:00:00Z",
               },
               data: {
                 type: "object",
                 description: "Content data payload",
+                properties: {
+                  content: {
+                    type: "object",
+                    properties: {
+                      id: {
+                        type: "string",
+                        description: "Content identifier",
+                        example: "6564",
+                      },
+                      name: {
+                        type: "string",
+                        description: "Content name",
+                        example: "Marvel Thunderbolts",
+                      },
+                    },
+                  },
+                  advertiser: {
+                    type: "object",
+                    properties: {
+                      id: {
+                        type: "string",
+                        description: "Advertiser identifier",
+                        example: "3",
+                      },
+                      name: {
+                        type: "string",
+                        description: "Advertiser name",
+                        example: "Total Radio",
+                      },
+                    },
+                  },
+                },
                 example: {
-                  title: "Example Song",
-                  artist: "Example Artist",
-                  duration: 180,
+                  content: { id: "6564", name: "Marvel Thunderbolts" },
+                  advertiser: { id: "3", name: "Total Radio" },
                 },
               },
             },
