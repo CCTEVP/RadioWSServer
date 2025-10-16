@@ -10,7 +10,7 @@ dotenv.config({ path: join(__dirname, "..", ".env") });
 import { WebSocketServer } from "ws";
 import http from "http";
 import swaggerUi from "swagger-ui-express";
-import swaggerSpecs from "./swagger.js";
+import { generateSwaggerSpecs } from "./swagger.js";
 import { roomRegistry } from "./rooms/index.js";
 import {
   extractToken,
@@ -113,6 +113,8 @@ const server = http.createServer(async (req, res) => {
 
   // Swagger JSON specification endpoint
   if (req.method === "GET" && req.url === "/docs/swagger.json") {
+    // Use the same PUBLIC_BASE_URL that the server is configured with
+    const swaggerSpecs = generateSwaggerSpecs(PUBLIC_BASE_URL);
     res.writeHead(200, {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",

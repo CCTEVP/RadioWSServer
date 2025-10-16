@@ -1,0 +1,57 @@
+# Node modules (will be installed in container)
+node_modules/
+npm-debug.log*
+
+# Development files
+.git/
+.gitignore
+README.md
+documents/
+
+# Development dependencies and tools
+.eslintrc*
+nodemon.json
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test files
+*.test.js
+test/
+tests/
+
+# Coverage reports
+coverage/
+
+# Environment files (copy manually if needed)
+.env.local
+.env.development
+.env.test
+
+# Logs
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
