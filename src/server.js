@@ -9,6 +9,8 @@ dotenv.config({ path: join(__dirname, "..", ".env") });
 
 import { WebSocketServer } from "ws";
 import http from "http";
+import swaggerUi from "swagger-ui-express";
+import swaggerSpecs from "./swagger.js";
 import { roomRegistry } from "./rooms/index.js";
 import {
   extractToken,
@@ -66,6 +68,56 @@ const server = http.createServer(async (req, res) => {
         registeredHandlers: roomRegistry.getRegisteredRooms(),
       })
     );
+    return;
+  }
+
+  // API Documentation endpoint
+  if (req.method === "GET" && req.url === "/docs") {
+    try {
+      const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RadioWSServer API Documentation</title>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui.css" />
+  <style>
+    .swagger-ui .topbar { display: none }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui-standalone-preset.js"></script>
+  <script>
+    SwaggerUIBundle({
+      url: '/docs/swagger.json',
+      dom_id: '#swagger-ui',
+      presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIStandalonePreset
+      ],
+      layout: "StandaloneLayout"
+    });
+  </script>
+</body>
+</html>`;
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(html);
+    } catch (error) {
+      console.error("Error generating docs:", error);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Failed to generate documentation" }));
+    }
+    return;
+  }
+
+  // Swagger JSON specification endpoint
+  if (req.method === "GET" && req.url === "/docs/swagger.json") {
+    res.writeHead(200, {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.end(JSON.stringify(swaggerSpecs, null, 2));
     return;
   }
 
