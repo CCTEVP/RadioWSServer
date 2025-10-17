@@ -31,10 +31,6 @@ export function generateSwaggerSpecs(baseUrl) {
           url: baseUrl,
           description: "Current server",
         },
-        {
-          url: "http://localhost:8080",
-          description: "Development server",
-        },
       ],
       components: {
         securitySchemes: {
