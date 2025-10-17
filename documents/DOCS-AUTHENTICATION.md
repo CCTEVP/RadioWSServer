@@ -79,15 +79,28 @@ gcloud run deploy radiowsserver \
 
 ## Accessing Documentation
 
-### Step 1: Navigate to /docs
+### Quick Access
 
-Open your browser and go to:
+Simply navigate to the server root URL and you'll be automatically redirected:
+
+```
+http://localhost:8080/
+```
+
+or directly to:
 
 ```
 http://localhost:8080/docs
 ```
 
-You'll be automatically redirected to the login page.
+Both URLs will automatically redirect you to the login page if you're not authenticated.
+
+### Step 1: Automatic Redirect
+
+When you visit the root URL (`/`) or `/docs`:
+
+- ✅ If authenticated: Shows documentation immediately
+- 🔐 If not authenticated: Redirects to login page
 
 ### Step 2: Login
 
@@ -98,15 +111,16 @@ Fill in the login form:
 
 ### Step 3: View Documentation
 
-After successful login, you'll be redirected to the Swagger UI documentation.
+After successful login, you'll be automatically redirected to the Swagger UI documentation.
 
 ## Login Page Features
 
+✅ **Automatic Redirect:** Root URL (`/`) redirects to `/docs`  
 ✅ **Email Validation:** Real-time email format validation  
 ✅ **Password Required:** Password field must not be empty  
 ✅ **Visual Feedback:** Success/error messages displayed inline  
 ✅ **Secure Sessions:** 24-hour session tokens with HttpOnly cookies  
-✅ **Auto-Redirect:** Successful login redirects to `/docs`
+✅ **Auto-Login Redirect:** Successful login redirects to `/docs`
 
 ## Session Management
 

@@ -297,6 +297,28 @@ export function generateSwaggerSpecs(baseUrl) {
         },
       ],
       paths: {
+        "/": {
+          get: {
+            tags: ["Documentation"],
+            summary: "Root endpoint - Redirects to documentation",
+            description:
+              "Automatically redirects to /docs endpoint. Authentication will be triggered if not already logged in.",
+            responses: {
+              302: {
+                description: "Redirect to /docs",
+                headers: {
+                  Location: {
+                    schema: {
+                      type: "string",
+                      example: "/docs",
+                    },
+                    description: "Redirect location",
+                  },
+                },
+              },
+            },
+          },
+        },
         "/health": {
           get: {
             tags: ["Health"],

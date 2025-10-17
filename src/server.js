@@ -52,6 +52,14 @@ const PUBLIC_BASE_URL = (
 // Basic HTTP server (optional for health check / upgrade flexibility)
 const server = http.createServer(async (req, res) => {
   // Simple router
+
+  // Redirect root to documentation
+  if (req.method === "GET" && req.url === "/") {
+    res.writeHead(302, { Location: "/docs" });
+    res.end();
+    return;
+  }
+
   if (req.method === "GET" && req.url.startsWith("/health")) {
     // Parse query parameters
     const url = new URL(req.url, `http://${req.headers.host}`);
