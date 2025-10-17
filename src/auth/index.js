@@ -85,7 +85,7 @@ export function verifyAuthToken(token, expectedRoom = null) {
       // Screen role - for display screens
       screen: {
         token:
-          "eyJjbGllbnRJZCI6InNjcmVlbiIsInJvb20iOiJyYWRpbyIsImV4cGlyZXNBdCI6NDkxNDEyMTU2NjQ2NCwibWV0YWRhdGEiOnsicm9sZSI6InNjcmVlbiIsInZhbGlkaXR5IjoiTm8gZXhwaXJhdGlvbiJ9LCJpc3N1ZWRBdCI6MTc2MDUyMTU2NjQ2NH0.zQyP4dYvPxMxGN_L5r8QJ4bZhE8aF7wKj2XnRiC9hgM",
+          "eyJjbGllbnRJZCI6InNjcmVlbiIsInJvb20iOiJyYWRpbyIsImV4cGlyZXNBdCI6NDkxNDEyMTU2NjQ2NCwibWV0YWRhdGEiOnsidmFsaWRpdHkiOiJObyBleHBpcmF0aW9uIn0sImlzc3VlZEF0IjoxNzYwNTIxNTY2NDY0fQ.1tMYGVIeJl5zPxOclrPWHieEognJGWDaq4-vzjziNi0",
         payload: {
           clientId: "screen",
           room: "radio",
