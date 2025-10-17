@@ -23,6 +23,13 @@ import {
   handlePostContentRequest,
   handlePostContentOptions,
 } from "./postcontent/index.js";
+import {
+  authenticateDocsUser,
+  requireDocsAuth,
+  destroySession,
+  getDocsCredentials,
+} from "./auth/docs-auth.js";
+import { readFileSync } from "fs";
 
 const PORT = process.env.PORT || 8080;
 // Heartbeat interval (ms). If 0 or negative, heartbeat disabled. 30s default keeps most proxies/NATs alive.
@@ -85,10 +92,112 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // API Documentation endpoint
-  if (req.method === "GET" && req.url === "/docs") {
+  // ============================================================================
+  // DOCUMENTATION AUTHENTICATION ROUTES
+  // ============================================================================
+
+  // GET /auth/docs-login-page - Login page for documentation access
+  if (req.method === "GET" && req.url === "/auth/docs-login-page") {
     try {
-      const html = `
+      const loginHtml = readFileSync(
+        join(__dirname, "auth", "login.html"),
+        "utf-8"
+      );
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(loginHtml);
+    } catch (error) {
+      console.error("Error loading login page:", error);
+      res.writeHead(500, { "Content-Type": "text/plain" });
+      res.end("Error loading login page");
+    }
+    return;
+  }
+
+  // POST /auth/docs-login - Handle login form submission
+  if (req.method === "POST" && req.url === "/auth/docs-login") {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+
+    req.on("end", () => {
+      try {
+        const { email, password } = JSON.parse(body);
+        const result = authenticateDocsUser(email, password);
+
+        if (result.success) {
+          // Set session cookie
+          const cookieOptions = [
+            `docs_auth_token=${result.token}`,
+            "HttpOnly",
+            "SameSite=Strict",
+            "Path=/",
+            `Max-Age=${24 * 60 * 60}`, // 24 hours
+          ].join("; ");
+
+          res.writeHead(200, {
+            "Content-Type": "application/json",
+            "Set-Cookie": cookieOptions,
+          });
+          res.end(
+            JSON.stringify({
+              success: true,
+              message: result.message,
+              token: result.token,
+            })
+          );
+        } else {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              success: false,
+              message: result.message,
+            })
+          );
+        }
+      } catch (error) {
+        console.error("Login error:", error);
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            success: false,
+            message: "Invalid request format",
+          })
+        );
+      }
+    });
+    return;
+  }
+
+  // POST /auth/docs-logout - Logout and destroy session
+  if (req.method === "POST" && req.url === "/auth/docs-logout") {
+    const cookies = req.headers.cookie ? parseCookies(req.headers.cookie) : {};
+    const token = cookies.docs_auth_token;
+
+    if (token) {
+      destroySession(token);
+    }
+
+    res.writeHead(200, {
+      "Content-Type": "application/json",
+      "Set-Cookie":
+        "docs_auth_token=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0",
+    });
+    res.end(
+      JSON.stringify({ success: true, message: "Logged out successfully" })
+    );
+    return;
+  }
+
+  // ============================================================================
+  // PROTECTED DOCUMENTATION ENDPOINTS
+  // ============================================================================
+
+  // API Documentation endpoint (PROTECTED)
+  if (req.method === "GET" && req.url === "/docs") {
+    return requireDocsAuth(req, res, () => {
+      try {
+        const html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -115,26 +224,39 @@ const server = http.createServer(async (req, res) => {
   </script>
 </body>
 </html>`;
-      res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(html);
-    } catch (error) {
-      console.error("Error generating docs:", error);
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Failed to generate documentation" }));
-    }
-    return;
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(html);
+      } catch (error) {
+        console.error("Error generating docs:", error);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Failed to generate documentation" }));
+      }
+    });
   }
 
-  // Swagger JSON specification endpoint
+  // Swagger JSON specification endpoint (PROTECTED)
   if (req.method === "GET" && req.url === "/docs/swagger.json") {
-    // Use the same PUBLIC_BASE_URL that the server is configured with
-    const swaggerSpecs = generateSwaggerSpecs(PUBLIC_BASE_URL);
-    res.writeHead(200, {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
+    return requireDocsAuth(req, res, () => {
+      // Use the same PUBLIC_BASE_URL that the server is configured with
+      const swaggerSpecs = generateSwaggerSpecs(PUBLIC_BASE_URL);
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(JSON.stringify(swaggerSpecs, null, 2));
     });
-    res.end(JSON.stringify(swaggerSpecs, null, 2));
-    return;
+  }
+
+  // Helper function to parse cookies
+  function parseCookies(cookieHeader) {
+    const cookies = {};
+    cookieHeader.split(";").forEach((cookie) => {
+      const [name, value] = cookie.trim().split("=");
+      if (name && value) {
+        cookies[name] = decodeURIComponent(value);
+      }
+    });
+    return cookies;
   }
 
   // Authentication Routes

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - RadioWS Server</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .login-container {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        width: 100%;
+        max-width: 400px;
+        padding: 40px;
+      }
+
+      .logo-container {
+        text-align: center;
+        margin-bottom: 32px;
+      }
+
+      .logo {
+        width: 80px;
+        height: 80px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 36px;
+        color: white;
+        font-weight: bold;
+        margin-bottom: 16px;
+      }
+
+      .logo-text {
+        font-size: 24px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 8px;
+      }
+
+      .logo-subtitle {
+        font-size: 14px;
+        color: #666;
+      }
+
+      .form-group {
+        margin-bottom: 24px;
+      }
+
+      .form-group label {
+        display: block;
+        font-size: 14px;
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 8px;
+      }
+
+      .form-group input {
+        width: 100%;
+        padding: 12px 16px;
+        font-size: 15px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        outline: none;
+      }
+
+      .form-group input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      }
+
+      .form-group input.error {
+        border-color: #f44336;
+      }
+
+      .form-group input.success {
+        border-color: #4caf50;
+      }
+
+      .error-message {
+        color: #f44336;
+        font-size: 13px;
+        margin-top: 6px;
+        display: none;
+      }
+
+      .error-message.show {
+        display: block;
+      }
+
+      .feedback-message {
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        font-size: 14px;
+        display: none;
+        animation: slideDown 0.3s ease;
+      }
+
+      .feedback-message.show {
+        display: block;
+      }
+
+      .feedback-message.success {
+        background-color: #e8f5e9;
+        color: #2e7d32;
+        border: 1px solid #4caf50;
+      }
+
+      .feedback-message.error {
+        background-color: #ffebee;
+        color: #c62828;
+        border: 1px solid #f44336;
+      }
+
+      @keyframes slideDown {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .login-button {
+        width: 100%;
+        padding: 14px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        outline: none;
+      }
+
+      .login-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+      }
+
+      .login-button:active {
+        transform: translateY(0);
+      }
+
+      .login-button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .spinner {
+        display: none;
+        width: 20px;
+        height: 20px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto;
+      }
+
+      .login-button.loading .button-text {
+        display: none;
+      }
+
+      .login-button.loading .spinner {
+        display: block;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .footer {
+        text-align: center;
+        margin-top: 24px;
+        font-size: 13px;
+        color: #999;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-container">
+      <div class="logo-container">
+        <div class="logo">RW</div>
+        <div class="logo-text">RadioWS Server</div>
+        <div class="logo-subtitle">API Documentation Access</div>
+      </div>
+
+      <div id="feedbackMessage" class="feedback-message"></div>
+
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            placeholder="Enter your email"
+            autocomplete="email"
+            required
+          />
+          <div id="emailError" class="error-message">
+            Please enter a valid email address
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Enter your password"
+            autocomplete="current-password"
+            required
+          />
+          <div id="passwordError" class="error-message">
+            Password is required
+          </div>
+        </div>
+
+        <button type="submit" class="login-button" id="loginButton">
+          <span class="button-text">Log In</span>
+          <div class="spinner"></div>
+        </button>
+      </form>
+
+      <div class="footer">&copy; 2025 RadioWS Server</div>
+    </div>
+
+    <script>
+      const loginForm = document.getElementById("loginForm");
+      const emailInput = document.getElementById("email");
+      const passwordInput = document.getElementById("password");
+      const emailError = document.getElementById("emailError");
+      const passwordError = document.getElementById("passwordError");
+      const feedbackMessage = document.getElementById("feedbackMessage");
+      const loginButton = document.getElementById("loginButton");
+
+      // Email validation pattern
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      // Real-time email validation
+      emailInput.addEventListener("blur", () => {
+        validateEmail();
+      });
+
+      emailInput.addEventListener("input", () => {
+        if (emailError.classList.contains("show")) {
+          validateEmail();
+        }
+      });
+
+      // Real-time password validation
+      passwordInput.addEventListener("blur", () => {
+        validatePassword();
+      });
+
+      passwordInput.addEventListener("input", () => {
+        if (passwordError.classList.contains("show")) {
+          validatePassword();
+        }
+      });
+
+      function validateEmail() {
+        const email = emailInput.value.trim();
+
+        if (!email) {
+          emailInput.classList.add("error");
+          emailInput.classList.remove("success");
+          emailError.textContent = "Email is required";
+          emailError.classList.add("show");
+          return false;
+        }
+
+        if (!emailPattern.test(email)) {
+          emailInput.classList.add("error");
+          emailInput.classList.remove("success");
+          emailError.textContent = "Please enter a valid email address";
+          emailError.classList.add("show");
+          return false;
+        }
+
+        emailInput.classList.remove("error");
+        emailInput.classList.add("success");
+        emailError.classList.remove("show");
+        return true;
+      }
+
+      function validatePassword() {
+        const password = passwordInput.value;
+
+        if (!password) {
+          passwordInput.classList.add("error");
+          passwordInput.classList.remove("success");
+          passwordError.textContent = "Password is required";
+          passwordError.classList.add("show");
+          return false;
+        }
+
+        passwordInput.classList.remove("error");
+        passwordInput.classList.add("success");
+        passwordError.classList.remove("show");
+        return true;
+      }
+
+      function showFeedback(message, type) {
+        feedbackMessage.textContent = message;
+        feedbackMessage.className = `feedback-message ${type} show`;
+
+        // Auto-hide success messages after 3 seconds
+        if (type === "success") {
+          setTimeout(() => {
+            feedbackMessage.classList.remove("show");
+          }, 3000);
+        }
+      }
+
+      function setLoading(isLoading) {
+        if (isLoading) {
+          loginButton.disabled = true;
+          loginButton.classList.add("loading");
+        } else {
+          loginButton.disabled = false;
+          loginButton.classList.remove("loading");
+        }
+      }
+
+      loginForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        // Hide previous feedback
+        feedbackMessage.classList.remove("show");
+
+        // Validate inputs
+        const isEmailValid = validateEmail();
+        const isPasswordValid = validatePassword();
+
+        if (!isEmailValid || !isPasswordValid) {
+          showFeedback("Please fix the errors above", "error");
+          return;
+        }
+
+        // Get form data
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
+
+        // Show loading state
+        setLoading(true);
+
+        try {
+          // Send login request
+          const response = await fetch("/auth/docs-login", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ email, password }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok && data.success) {
+            // Success - store session and redirect
+            showFeedback("✓ Login successful! Redirecting...", "success");
+
+            // Store auth token if provided
+            if (data.token) {
+              sessionStorage.setItem("docs_auth_token", data.token);
+            }
+
+            // Redirect to docs after short delay
+            setTimeout(() => {
+              window.location.href = "/docs";
+            }, 1000);
+          } else {
+            // Failed - show error
+            showFeedback(
+              data.message || "Login denied. Invalid credentials.",
+              "error"
+            );
+
+            // Reset password field
+            passwordInput.value = "";
+            passwordInput.classList.remove("success");
+          }
+        } catch (error) {
+          console.error("Login error:", error);
+          showFeedback("Connection error. Please try again.", "error");
+        } finally {
+          setLoading(false);
+        }
+      });
+
+      // Clear feedback when user starts typing
+      emailInput.addEventListener("input", () => {
+        feedbackMessage.classList.remove("show");
+      });
+
+      passwordInput.addEventListener("input", () => {
+        feedbackMessage.classList.remove("show");
+      });
+    </script>
+  </body>
+</html>

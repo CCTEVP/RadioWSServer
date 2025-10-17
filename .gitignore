@@ -1,5 +1,15 @@
 node_modules/
 .DS_Store
 .env
+.env.local
+.env.production
 npm-debug.log*
 yarn-error.log
+
+# Cloud Run deployment files (contain secrets)
+cloud-run-env.yaml
+cloud-run-secrets.yaml
+
+# IDE files
+.vscode/settings.json
+.idea/
