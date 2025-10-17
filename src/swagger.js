@@ -13,18 +13,10 @@ export function generateSwaggerSpecs(baseUrl) {
     definition: {
       openapi: "3.0.0",
       info: {
-        title: "RadioWSServer API",
+        title: "Echo API",
         version: "0.1.0",
         description:
-          "WebSocket broadcast server with HTTP API endpoints for radio content management and authentication",
-        contact: {
-          name: "API Support",
-          email: "support@example.com",
-        },
-        license: {
-          name: "MIT",
-          url: "https://opensource.org/licenses/MIT",
-        },
+          "Real-time broadcast system with WebSocket support and HTTP API endpoints for content delivery and authentication",
       },
       servers: [
         {
