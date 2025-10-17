@@ -1,19 +1,20 @@
 /**
  * BACKWARD COMPATIBILITY ENDPOINT
  *
- * This module provides the legacy /postcontent endpoint that forwards
- * requests to the /radio/post endpoint without requiring authentication.
+ * This module provides the legacy /postcontent endpoint that acts as a bridge
+ * to /rooms/radio/post using the hardcoded "advertiser" token.
  *
- * This exists for backward compatibility with old clients.
- * Can be safely removed once all clients migrate to /radio/post
+ * This exists for backward compatibility with old clients that don't send tokens.
+ * Can be safely removed once all clients migrate to /rooms/radio/post
  */
 
-export function handlePostContentRequest(
-  req,
-  res,
-  roomRegistry,
-  broadcastToRoom
-) {
+import http from "http";
+
+// Hardcoded advertiser token for backward compatibility
+const ADVERTISER_TOKEN =
+  "eyJjbGllbnRJZCI6ImFkdmVydGlzZXIiLCJyb29tIjoicmFkaW8iLCJleHBpcmVzQXQiOjQ5MTQxMjE1NjY0NjQsIm1ldGFkYXRhIjp7InJvbGUiOiJhZHZlcnRpc2VyIiwidmFsaWRpdHkiOiJObyBleHBpcmF0aW9uIn0sImlzc3VlZEF0IjoxNzYwNTIxNTY2NDY0fQ.K7jX9mNvL4pRnQwS8tYc1UhA6fBgE3qJsW2oZxI5kDv";
+
+export function handlePostContentRequest(req, res) {
   let raw = "";
   let received = 0;
   const MAX_POST_BYTES = parseInt(
@@ -45,82 +46,52 @@ export function handlePostContentRequest(
       return;
     }
 
-    // Validate required fields
-    const errors = [];
-    if (!body || typeof body !== "object")
-      errors.push("Body must be a JSON object");
-    if (!("type" in body)) errors.push("Missing field: type");
-    if (!("timestamp" in body)) errors.push("Missing field: timestamp");
-    if (!("data" in body)) errors.push("Missing field: data");
-
-    if (errors.length) {
-      res.writeHead(422, {
+    // Bridge to /rooms/radio/post with advertiser token
+    const port = process.env.PORT || 8080;
+    const options = {
+      hostname: "localhost",
+      port: port,
+      path: "/rooms/radio/post",
+      method: "POST",
+      headers: {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-      });
-      res.end(JSON.stringify({ error: "Validation failed", details: errors }));
-      return;
-    }
+        Authorization: `Bearer ${ADVERTISER_TOKEN}`,
+      },
+    };
 
-    // Forward to radio room
-    const handler = roomRegistry.getHandler("radio");
-    if (!handler) {
+    const proxyReq = http.request(options, (proxyRes) => {
+      let responseData = "";
+
+      proxyRes.on("data", (chunk) => {
+        responseData += chunk;
+      });
+
+      proxyRes.on("end", () => {
+        // Forward the response from /room/radio/post
+        res.writeHead(proxyRes.statusCode, {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        });
+        res.end(responseData);
+      });
+    });
+
+    proxyReq.on("error", (error) => {
+      console.error("❌ Bridge error:", error);
       res.writeHead(500, {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*",
       });
-      res.end(JSON.stringify({ error: "Radio room handler not found" }));
-      return;
-    }
-
-    // Validate with radio handler
-    const validationError = await handler.validateHttpPost(body);
-    if (validationError) {
-      res.writeHead(validationError.code || 422, {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-      });
-      res.end(JSON.stringify({ error: validationError.error }));
-      return;
-    }
-
-    // Attach server receipt timestamp
-    let broadcastPayload = {
-      ...body,
-      serverReceivedAt: new Date().toISOString(),
-    };
-
-    // Let handler process/modify the payload
-    const handlerResult = await handler.onHttpPost(broadcastPayload);
-    if (handlerResult === false) {
-      res.writeHead(403, {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-      });
-      res.end(JSON.stringify({ error: "Rejected by room handler" }));
-      return;
-    }
-
-    // Use handler's modified payload if provided
-    if (handlerResult !== null && handlerResult !== undefined) {
-      broadcastPayload = handlerResult;
-    }
-
-    // Broadcast to radio room
-    const delivered = broadcastToRoom("radio", broadcastPayload);
-
-    res.writeHead(200, {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
+      res.end(
+        JSON.stringify({
+          error: "Failed to forward request to /rooms/radio/post",
+        })
+      );
     });
-    res.end(
-      JSON.stringify({
-        status: "ok",
-        room: "radio",
-        delivered,
-        echo: broadcastPayload,
-      })
-    );
+
+    // Send the original body to the target endpoint
+    proxyReq.write(JSON.stringify(body));
+    proxyReq.end();
   });
 }
 

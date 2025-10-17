@@ -1,15 +1,18 @@
 /**
- * HTTP Routes for radio room
+ * Generic HTTP Routes for all rooms
  *
- * This module defines HTTP endpoints specific to the radio room.
- * Each room can have its own routes organized in this pattern.
+ * This module defines HTTP endpoints that work for ANY room.
+ * Room-specific logic is delegated to the room's handler.
  */
 
 /**
- * Handle POST /radio/post
+ * Handle POST /room/:roomName/post
  *
- * Broadcasts content to all clients in the radio room.
+ * Broadcasts content to all clients in the specified room.
  * Requires authentication and validates content structure.
+ *
+ * This is a generic handler that works for any room (radio, chat, etc.)
+ * Room-specific validation and processing is done by the room's handler.
  */
 export async function handlePost(
   req,
@@ -78,7 +81,7 @@ export async function handlePost(
       return;
     }
 
-    // Let handler validate
+    // Let handler validate (room-specific validation)
     const validationError = await handler.validateHttpPost(body);
     if (validationError) {
       res.writeHead(validationError.code || 422, {
@@ -94,7 +97,7 @@ export async function handlePost(
       serverReceivedAt: new Date().toISOString(),
     };
 
-    // Let handler process/modify the payload
+    // Let handler process/modify the payload (room-specific processing)
     const handlerResult = await handler.onHttpPost(broadcastPayload);
     if (handlerResult === false) {
       res.writeHead(403, { "Content-Type": "application/json" });
@@ -107,7 +110,7 @@ export async function handlePost(
       broadcastPayload = handlerResult;
     }
 
-    // Broadcast only to clients in the radio room
+    // Broadcast to clients in the specified room
     const delivered = broadcastToRoom(handler.roomName, broadcastPayload);
 
     res.writeHead(200, {
@@ -126,7 +129,7 @@ export async function handlePost(
 }
 
 /**
- * Route configuration for radio room
+ * Generic route configuration for all rooms
  * Each route specifies: method, path pattern, handler function
  */
 export const routes = [

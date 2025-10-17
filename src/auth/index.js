@@ -80,30 +80,61 @@ export function verifyAuthToken(token, expectedRoom = null) {
       return null;
     }
 
-    // Hardcoded always-valid token bypass
-    const ALWAYS_VALID_TOKEN =
-      "eyJjbGllbnRJZCI6InNjcmVlbiIsInJvb20iOiJyYWRpbyIsImV4cGlyZXNBdCI6NDkxNDEyMTU2NjQ2NCwibWV0YWRhdGEiOnsidmFsaWRpdHkiOiJObyBleHBpcmF0aW9uIn0sImlzc3VlZEF0IjoxNzYwNTIxNTY2NDY0fQ.1tMYGVIeJl5zPxOclrPWHieEognJGWDaq4-vzjziNi0";
+    // Hardcoded always-valid tokens for trusted clients
+    const ALWAYS_VALID_TOKENS = {
+      // Screen role - for display screens
+      screen: {
+        token:
+          "eyJjbGllbnRJZCI6InNjcmVlbiIsInJvb20iOiJyYWRpbyIsImV4cGlyZXNBdCI6NDkxNDEyMTU2NjQ2NCwibWV0YWRhdGEiOnsicm9sZSI6InNjcmVlbiIsInZhbGlkaXR5IjoiTm8gZXhwaXJhdGlvbiJ9LCJpc3N1ZWRBdCI6MTc2MDUyMTU2NjQ2NH0.zQyP4dYvPxMxGN_L5r8QJ4bZhE8aF7wKj2XnRiC9hgM",
+        payload: {
+          clientId: "screen",
+          room: "radio",
+          expiresAt: 4914121566464,
+          metadata: { role: "screen", validity: "No expiration" },
+          issuedAt: 1760521566464,
+        },
+      },
+      // Advertiser role - for content posting
+      advertiser: {
+        token:
+          "eyJjbGllbnRJZCI6ImFkdmVydGlzZXIiLCJyb29tIjoicmFkaW8iLCJleHBpcmVzQXQiOjQ5MTQxMjE1NjY0NjQsIm1ldGFkYXRhIjp7InJvbGUiOiJhZHZlcnRpc2VyIiwidmFsaWRpdHkiOiJObyBleHBpcmF0aW9uIn0sImlzc3VlZEF0IjoxNzYwNTIxNTY2NDY0fQ.K7jX9mNvL4pRnQwS8tYc1UhA6fBgE3qJsW2oZxI5kDv",
+        payload: {
+          clientId: "advertiser",
+          room: "radio",
+          expiresAt: 4914121566464,
+          metadata: { role: "advertiser", validity: "No expiration" },
+          issuedAt: 1760521566464,
+        },
+      },
+      // Control role - for administrative control
+      control: {
+        token:
+          "eyJjbGllbnRJZCI6ImNvbnRyb2wiLCJyb29tIjoicmFkaW8iLCJleHBpcmVzQXQiOjQ5MTQxMjE1NjY0NjQsIm1ldGFkYXRhIjp7InJvbGUiOiJjb250cm9sIiwidmFsaWRpdHkiOiJObyBleHBpcmF0aW9uIn0sImlzc3VlZEF0IjoxNzYwNTIxNTY2NDY0fQ.P3mH8nRwT6jKbVxZ9sLq2YdF5aGtC4wJoX1yNiE7uMp",
+        payload: {
+          clientId: "control",
+          room: "radio",
+          expiresAt: 4914121566464,
+          metadata: { role: "control", validity: "No expiration" },
+          issuedAt: 1760521566464,
+        },
+      },
+    };
 
-    if (token === ALWAYS_VALID_TOKEN) {
-      console.log("✅ Always-valid token accepted");
-      // Return the decoded payload without verification
-      const payload = {
-        clientId: "screen",
-        room: "radio",
-        expiresAt: 4914121566464,
-        metadata: { validity: "No expiration" },
-        issuedAt: 1760521566464,
-      };
+    // Check if token matches any of the hardcoded tokens
+    for (const [role, config] of Object.entries(ALWAYS_VALID_TOKENS)) {
+      if (token === config.token) {
+        console.log(`✅ Always-valid token accepted: ${role}`);
 
-      // Check room if provided
-      if (expectedRoom && payload.room !== expectedRoom) {
-        console.warn(
-          `Token room mismatch: expected ${expectedRoom}, got ${payload.room}`
-        );
-        return null;
+        // Check room if provided
+        if (expectedRoom && config.payload.room !== expectedRoom) {
+          console.warn(
+            `Token room mismatch: expected ${expectedRoom}, got ${config.payload.room}`
+          );
+          return null;
+        }
+
+        return config.payload;
       }
-
-      return payload;
     }
 
     // Split token into payload and signature

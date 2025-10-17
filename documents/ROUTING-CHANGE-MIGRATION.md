@@ -27,15 +27,15 @@ Examples:
 ### New Routing Pattern
 
 ```
-/room/:roomName/:path
+/rooms/:roomName/:path
 ```
 
 Examples:
 
-- `/room/radio/post` → Radio room POST endpoint
-- `/room/chat/messages` → Chat room messages endpoint
+- `/rooms/radio/post` → Radio room POST endpoint
+- `/rooms/chat/messages` → Chat room messages endpoint
 
-**Benefit:** Clear separation between special endpoints and room-based routing. The `/room/` prefix makes it explicit.
+**Benefit:** Clear separation between special endpoints and room-based routing. The `/rooms/` prefix makes it explicit.
 
 ---
 
@@ -53,7 +53,7 @@ Authorization: Bearer <token>
 #### After (✅ New):
 
 ```bash
-POST /room/radio/post
+POST /rooms/radio/post
 Authorization: Bearer <token>
 ```
 
@@ -73,7 +73,7 @@ const response = await fetch("http://localhost:8080/radio/post", {
 });
 
 // NEW
-const response = await fetch("http://localhost:8080/room/radio/post", {
+const response = await fetch("http://localhost:8080/rooms/radio/post", {
   method: "POST",
   headers: {
     Authorization: `Bearer ${token}`,
@@ -93,7 +93,7 @@ Invoke-WebRequest -Uri http://localhost:8080/radio/post `
   -Body ($payload | ConvertTo-Json)
 
 # NEW
-Invoke-WebRequest -Uri http://localhost:8080/room/radio/post `
+Invoke-WebRequest -Uri http://localhost:8080/rooms/radio/post `
   -Method POST `
   -Headers @{ "Authorization" = "Bearer $token" } `
   -Body ($payload | ConvertTo-Json)
@@ -109,7 +109,7 @@ curl -X POST http://localhost:8080/radio/post \
   -d @payload.json
 
 # NEW
-curl -X POST http://localhost:8080/room/radio/post \
+curl -X POST http://localhost:8080/rooms/radio/post \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d @payload.json
@@ -119,13 +119,13 @@ curl -X POST http://localhost:8080/room/radio/post \
 
 1. Open your Postman collection
 2. Find all requests to `/:room/post` or `/:room/*`
-3. Update URL to `/room/:room/post` or `/room/:room/*`
+3. Update URL to `/rooms/:room/post` or `/rooms/:room/*`
 4. Save the collection
 
 Example:
 
 - Old: `{{baseUrl}}/radio/post`
-- New: `{{baseUrl}}/room/radio/post`
+- New: `{{baseUrl}}/rooms/radio/post`
 
 ### 4. Update Environment Variables
 
@@ -136,7 +136,7 @@ If you have base URLs stored in environment variables or config files:
 const RADIO_POST_URL = "http://localhost:8080/radio/post";
 
 // NEW
-const RADIO_POST_URL = "http://localhost:8080/room/radio/post";
+const RADIO_POST_URL = "http://localhost:8080/rooms/radio/post";
 ```
 
 ---
@@ -145,18 +145,18 @@ const RADIO_POST_URL = "http://localhost:8080/room/radio/post";
 
 ### Legacy `/postcontent` Endpoint
 
-The `/postcontent` endpoint remains **unchanged** and does NOT require the `/room/` prefix.
+The `/postcontent` endpoint remains **unchanged** and does NOT require the `/rooms/` prefix.
 
 ```bash
 POST /postcontent  # Still works (no authentication required)
 ```
 
-This is intentional for backward compatibility with legacy clients. When all clients migrate to `/room/radio/post`, the `/postcontent` endpoint can be removed.
+This is intentional for backward compatibility with legacy clients. When all clients migrate to `/rooms/radio/post`, the `/postcontent` endpoint can be removed.
 
 **Migration path for legacy clients:**
 
 - **Current:** `/postcontent` (no auth) → works
-- **Recommended:** `/room/radio/post` (with auth) → use this for new implementations
+- **Recommended:** `/rooms/radio/post` (with auth) → use this for new implementations
 - **Future:** `/postcontent` will be deprecated once all clients migrate
 
 ---
@@ -167,19 +167,19 @@ These endpoints remain the same (single-level paths):
 
 ✅ `/health` - Health check  
 ✅ `/auth/token` - Token generation  
-✅ `/postcontent` - Legacy backward compatibility (no `/room/` prefix)
+✅ `/postcontent` - Legacy backward compatibility (no `/rooms/` prefix)
 
 ---
 
 ## Room-Based Endpoints
 
-All room-based endpoints now require the `/room/` prefix:
+All room-based endpoints now require the `/rooms/` prefix:
 
 | Room   | Old URL            | New URL                 |
 | ------ | ------------------ | ----------------------- |
-| Radio  | `/radio/post`      | `/room/radio/post`      |
-| Chat   | `/chat/messages`   | `/room/chat/messages`   |
-| Custom | `/:roomName/:path` | `/room/:roomName/:path` |
+| Radio  | `/radio/post`      | `/rooms/radio/post`      |
+| Chat   | `/chat/messages`   | `/rooms/chat/messages`   |
+| Custom | `/:roomName/:path` | `/rooms/:roomName/:path` |
 
 ---
 
@@ -190,7 +190,7 @@ All room-based endpoints now require the `/room/` prefix:
 The test scripts have been updated to use the new routing:
 
 ```bash
-# Test the new /room/radio/post endpoint (requires authentication)
+# Test the new /rooms/radio/post endpoint (requires authentication)
 node test-post-endpoint.js
 
 # Test the legacy /postcontent endpoint (no authentication)
@@ -206,7 +206,7 @@ curl -X POST http://localhost:8080/auth/token \
   -d '{"clientId":"test-client","room":"radio"}'
 
 # 2. Test the new endpoint
-curl -X POST http://localhost:8080/room/radio/post \
+curl -X POST http://localhost:8080/rooms/radio/post \
   -H "Authorization: Bearer <your-token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -232,7 +232,7 @@ Update your production environment variables if you have hardcoded URLs:
 RADIO_POST_ENDPOINT=https://your-server.com/radio/post
 
 # NEW
-RADIO_POST_ENDPOINT=https://your-server.com/room/radio/post
+RADIO_POST_ENDPOINT=https://your-server.com/rooms/radio/post
 ```
 
 ### Cloud Run / Docker
@@ -260,7 +260,7 @@ const roomRouteMatch = req.url.match(/^\/([^\/]+)(\/.*)?$/);
 
 If you encounter issues during migration:
 
-1. Check that you've updated all endpoints to include `/room/` prefix
+1. Check that you've updated all endpoints to include `/rooms/` prefix
 2. Verify your authentication tokens are valid
 3. Review server logs for error messages
 4. Test with the provided test scripts first
@@ -269,7 +269,7 @@ If you encounter issues during migration:
 
 ## Summary Checklist
 
-- [ ] Updated all HTTP client code to use `/room/:roomName/:path`
+- [ ] Updated all HTTP client code to use `/rooms/:roomName/:path`
 - [ ] Updated Postman collections
 - [ ] Updated environment variables and config files
 - [ ] Tested with `test-post-endpoint.js`
@@ -279,4 +279,4 @@ If you encounter issues during migration:
 
 ---
 
-**Note:** The `/postcontent` endpoint continues to work without the `/room/` prefix for backward compatibility. Plan to migrate legacy clients to `/room/radio/post` and eventually remove `/postcontent`.
+**Note:** The `/postcontent` endpoint continues to work without the `/rooms/` prefix for backward compatibility. Plan to migrate legacy clients to `/rooms/radio/post` and eventually remove `/postcontent`.

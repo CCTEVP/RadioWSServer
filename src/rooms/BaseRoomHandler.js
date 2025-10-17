@@ -144,12 +144,13 @@ export class BaseRoomHandler {
 
   /**
    * Get HTTP routes for this room
-   * Override this to provide custom routes from a routes.js file
+   * By default, loads generic routes from src/rooms/routes.js
+   * Override this to provide room-specific custom routes
    * @returns {Array|null} - Array of route configurations, or null if no custom routes
    */
   async getRoutes() {
-    // Default: no custom routes
-    // Room handlers can override this to load routes from their routes.js file
-    return null;
+    // Default: load generic routes that work for all rooms
+    const { routes } = await import("./routes.js");
+    return routes;
   }
 }

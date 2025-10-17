@@ -2,16 +2,23 @@
 
 ## Purpose
 
-This folder contains the backward compatibility endpoint `/postcontent` that forwards requests to the `/radio/post` endpoint without requiring authentication.
+This folder contains the backward compatibility endpoint `/postcontent` that acts as a bridge to `/rooms/radio/post` using the hardcoded **advertiser token**.
 
-This exists for legacy clients that have not yet migrated to the new room-based routing system.
+This exists for legacy clients that have not yet migrated to the new room-based routing system with authentication.
+
+## How It Works
+
+1. Client sends POST request to `/postcontent` (no token required)
+2. Server internally forwards to `/rooms/radio/post` with hardcoded advertiser token
+3. Response from `/rooms/radio/post` is forwarded back to client
 
 ## Endpoint Details
 
 - **URL:** `POST /postcontent`
-- **Authentication:** None required (internal forwarding)
-- **Target:** Forwards to radio room
-- **Payload:** Same format as `/radio/post`:
+- **Authentication:** None required from client (uses internal advertiser token)
+- **Target:** Bridges to `/rooms/radio/post` with advertiser authentication
+- **Token Used:** Hardcoded advertiser token (clientId: `advertiser`)
+- **Payload:** Same format as `/rooms/radio/post`:
   ```json
   {
     "type": "string (required)",
@@ -24,14 +31,14 @@ This exists for legacy clients that have not yet migrated to the new room-based 
 
 ## Migration Path
 
-New clients should use the standard room-based endpoint:
+New clients should use the standard room-based endpoint directly:
 
-- **Old:** `POST /postcontent`
-- **New:** `POST /room/radio/post` (with Bearer token authentication)
+- **Old:** `POST /postcontent` (no token, backward compatibility)
+- **New:** `POST /rooms/radio/post` (with Bearer token authentication)
 
 ## How to Remove This Endpoint
 
-When all clients have migrated to `/radio/post`, follow these steps:
+When all clients have migrated to `/rooms/radio/post`, follow these steps:
 
 ### 1. Delete this folder
 
@@ -58,7 +65,7 @@ Delete this section (look for "BACKWARD COMPATIBILITY ENDPOINT" comments):
 // ============================================================================
 // BACKWARD COMPATIBILITY ENDPOINT
 // ============================================================================
-// POST /postcontent - Legacy endpoint that forwards to /radio/post
+// POST /postcontent - Legacy endpoint that forwards to /rooms/radio/post
 // See src/postcontent/index.js for implementation
 // Delete the entire /src/postcontent/ folder when no longer needed
 if (req.method === "POST" && req.url === "/postcontent") {
@@ -84,7 +91,7 @@ npm start
 
 Verify that:
 
-- `/radio/post` still works with authentication
+- `/rooms/radio/post` still works with authentication
 - No errors about missing modules
 - Server starts successfully
 

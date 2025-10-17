@@ -265,12 +265,6 @@ export class RadioHandler extends BaseRoomHandler {
     }
   }
 
-  /**
-   * Get HTTP routes for this room
-   */
-  async getRoutes() {
-    // Dynamically import routes to avoid circular dependencies
-    const { routes } = await import("./routes.js");
-    return routes;
-  }
+  // Uses generic routes from BaseRoomHandler (src/rooms/routes.js)
+  // Override getRoutes() here if you need radio-specific custom routes
 }

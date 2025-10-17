@@ -211,12 +211,15 @@ const server = http.createServer(async (req, res) => {
   // ============================================================================
   // BACKWARD COMPATIBILITY ENDPOINT
   // ============================================================================
-  // POST /postcontent - Legacy endpoint that forwards to /radio/post
+  // POST /postcontent - Legacy endpoint that bridges to /rooms/radio/post
+  // with hardcoded advertiser token
   // See src/postcontent/index.js for implementation
   // Delete the entire /src/postcontent/ folder when no longer needed
   if (req.method === "POST" && req.url === "/postcontent") {
-    console.log("✅ /postcontent endpoint matched - forwarding to radio room");
-    handlePostContentRequest(req, res, roomRegistry, broadcastToRoom);
+    console.log(
+      "✅ /postcontent endpoint matched - bridging to /rooms/radio/post with advertiser token"
+    );
+    handlePostContentRequest(req, res);
     return;
   }
 
@@ -231,8 +234,8 @@ const server = http.createServer(async (req, res) => {
   // ============================================================================
 
   // OPTIONS for room-based routing (CORS preflight)
-  // Handle preflight requests for /room/:roomName/:path endpoints
-  const roomOptionsMatch = req.url.match(/^\/room\/([^\/]+)(\/[^\/]+.*)$/);
+  // Handle preflight requests for /rooms/:roomName/:path endpoints
+  const roomOptionsMatch = req.url.match(/^\/rooms\/([^\/]+)(\/[^\/]+.*)$/);
   if (req.method === "OPTIONS" && roomOptionsMatch) {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
@@ -243,10 +246,10 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Room-based routing ONLY: /room/:roomName/:path
-  // Examples: /room/radio/post, /room/chat/messages
-  // This matches paths starting with /room/ prefix
-  const roomRouteMatch = req.url.match(/^\/room\/([^\/]+)(\/[^\/]+.*)$/);
+  // Room-based routing ONLY: /rooms/:roomName/:path
+  // Examples: /rooms/radio/post, /rooms/chat/messages
+  // This matches paths starting with /rooms/ prefix
+  const roomRouteMatch = req.url.match(/^\/rooms\/([^\/]+)(\/[^\/]+.*)$/);
   if (roomRouteMatch) {
     const roomName = roomRouteMatch[1];
     const roomPath = roomRouteMatch[2];
@@ -481,7 +484,7 @@ wss.on("connection", async (socket, req) => {
 
   // Extract room from URL path or query parameter
   // Examples:
-  //   - ws://server/room/radio?token=xxx (preferred with /room/ prefix)
+  //   - ws://server/rooms/radio?token=xxx (preferred with /rooms/ prefix)
   //   - ws://server/radio?token=xxx (legacy, backward compatible)
   //   - ws://server/?room=radio&token=xxx (query parameter)
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -493,16 +496,16 @@ wss.on("connection", async (socket, req) => {
   const pathname = url.pathname;
   console.log(`🔍 WebSocket connection attempt - pathname: ${pathname}`);
 
-  // 1. Try /room/:roomName pattern (preferred)
-  const roomPrefixMatch = pathname.match(/^\/room\/([^\/]+)/);
+  // 1. Try /rooms/:roomName pattern (preferred)
+  const roomPrefixMatch = pathname.match(/^\/rooms\/([^\/]+)/);
   if (roomPrefixMatch) {
     roomName = roomPrefixMatch[1];
-    console.log(`✅ Matched /room/ prefix pattern - room: ${roomName}`);
+    console.log(`✅ Matched /rooms/ prefix pattern - room: ${roomName}`);
   }
   // 2. Try legacy /:roomName pattern (backward compatible)
   else {
     const legacyPathRoom = pathname.replace(/^\/+/, "").split("/")[0];
-    if (legacyPathRoom && legacyPathRoom !== "room") {
+    if (legacyPathRoom && legacyPathRoom !== "rooms") {
       roomName = legacyPathRoom;
       console.log(`✅ Matched legacy pattern - room: ${roomName}`);
     }

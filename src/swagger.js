@@ -383,7 +383,7 @@ export function generateSwaggerSpecs(baseUrl) {
             },
           },
         },
-        "/room/radio/post": {
+        "/rooms/radio/post": {
           post: {
             tags: ["Radio Content"],
             summary: "Broadcast content to radio room",
@@ -480,7 +480,7 @@ export function generateSwaggerSpecs(baseUrl) {
             tags: ["Legacy"],
             summary: "Legacy content posting endpoint",
             description:
-              "DEPRECATED: Legacy endpoint that forwards to /room/radio/post without authentication. Use /room/radio/post instead.",
+              "DEPRECATED: Legacy endpoint that forwards to /rooms/radio/post without authentication. Use /rooms/radio/post instead.",
             deprecated: true,
             requestBody: {
               required: true,

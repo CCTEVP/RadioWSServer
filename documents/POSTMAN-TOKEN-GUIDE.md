@@ -226,7 +226,7 @@ ws://localhost:8080/radio?token=YOUR_TOKEN_HERE
 
 **For Postman:**
 
-1. Create new POST request to: `http://localhost:8080/room/radio/post`
+1. Create new POST request to: `http://localhost:8080/rooms/radio/post`
 2. **Headers** tab:
    - Key: `Authorization`
    - Value: `Bearer YOUR_TOKEN_HERE`
