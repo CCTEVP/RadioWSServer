@@ -3,6 +3,7 @@
  *
  * Provides session-based authentication for protected documentation routes.
  * Uses email/password validation with session tokens.
+ * Email is stored hashed for security.
  */
 
 import crypto from "crypto";
@@ -15,12 +16,44 @@ const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 const SESSION_CLEANUP_INTERVAL = 60 * 60 * 1000; // Clean up every hour
 
 /**
+ * Hash an email address using SHA-256
+ * This allows storing email hashes instead of plain text
+ */
+function hashEmail(email) {
+  return crypto
+    .createHash("sha256")
+    .update(email.toLowerCase().trim())
+    .digest("hex");
+}
+
+/**
+ * Hash a password using SHA-256
+ * This allows storing password hashes instead of plain text
+ */
+function hashPassword(password) {
+  return crypto.createHash("sha256").update(password.trim()).digest("hex");
+}
+
+/**
  * Get documentation credentials from environment
+ * Returns the hashed email and password for comparison
  */
 export function getDocsCredentials() {
+  // If DOCS_EMAIL_HASH is provided, use it directly
+  // Otherwise, hash the DOCS_EMAIL
+  const emailHash =
+    process.env.DOCS_EMAIL_HASH ||
+    hashEmail(process.env.DOCS_EMAIL || "admin@radiows.local");
+
+  // If DOCS_PASSWORD_HASH is provided, use it directly
+  // Otherwise, hash the DOCS_PASSWORD
+  const passwordHash =
+    process.env.DOCS_PASSWORD_HASH ||
+    hashPassword(process.env.DOCS_PASSWORD || "admin123");
+
   return {
-    email: process.env.DOCS_EMAIL || "admin@radiows.local",
-    password: process.env.DOCS_PASSWORD || "admin123",
+    emailHash: emailHash,
+    passwordHash: passwordHash,
   };
 }
 
@@ -125,6 +158,7 @@ setInterval(cleanupExpiredSessions, SESSION_CLEANUP_INTERVAL);
 
 /**
  * Authenticate user credentials
+ * User provides plain text email and password, but comparison is against hashed values
  */
 export function authenticateDocsUser(email, password) {
   if (!email || !password) {
@@ -136,11 +170,18 @@ export function authenticateDocsUser(email, password) {
     return { success: false, message: "Invalid email format" };
   }
 
-  // Get credentials from environment
+  // Get credentials from environment (emailHash and passwordHash)
   const credentials = getDocsCredentials();
 
-  // Check credentials
-  if (email === credentials.email && password === credentials.password) {
+  // Hash the provided email and password for comparison
+  const providedEmailHash = hashEmail(email);
+  const providedPasswordHash = hashPassword(password);
+
+  // Check credentials (compare hashes with hashes)
+  if (
+    providedEmailHash === credentials.emailHash &&
+    providedPasswordHash === credentials.passwordHash
+  ) {
     const token = createSession(email);
     return {
       success: true,

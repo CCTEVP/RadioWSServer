@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `/docs` API documentation endpoint is protected with email/password authentication to prevent unauthorized access.
+The `/docs` API documentation endpoint is protected with email/password authentication to prevent unauthorized access. Credentials are stored as SHA-256 hashes for security.
 
 ## Default Credentials (Development)
 
@@ -11,29 +11,62 @@ The `/docs` API documentation endpoint is protected with email/password authenti
 - **Email:** `admin@radiows.local`
 - **Password:** `admin123`
 
+## Security
+
+Credentials are stored as SHA-256 hashes, not plain text:
+
+- Email and password are hashed before storage
+- Users still enter plain text credentials during login
+- Server compares hashed values for authentication
+
+## Generating Credential Hashes
+
+Use the provided utility script to generate hashes:
+
+```bash
+node src/utils/generate-docs-hash.js your.email@company.com YourSecurePassword123!
+```
+
+This will output:
+
+```
+=== Documentation Authentication Hashes ===
+
+Email: your.email@company.com
+Email Hash: abc123...
+
+Password: *********************
+Password Hash: def456...
+
+=== Environment Variables ===
+DOCS_EMAIL_HASH=abc123...
+DOCS_PASSWORD_HASH=def456...
+```
+
 ## Production Setup
 
 Set these environment variables before starting the server:
 
 ```bash
-DOCS_EMAIL=your.email@company.com
-DOCS_PASSWORD=YourSecurePassword123!
+DOCS_EMAIL_HASH=your_email_hash_here
+DOCS_PASSWORD_HASH=your_password_hash_here
 ```
 
 ### Setting via .env file:
 
 ```bash
 # .env file
-DOCS_EMAIL=admin@yourcompany.com
-DOCS_PASSWORD=SecureP@ssw0rd!2025
+# Generate hashes with: node src/utils/generate-docs-hash.js your@email.com yourpassword
+DOCS_EMAIL_HASH=4fb7f98afffb0af736947a5f72d1f6e0287ad63ccbc506c7ba62940db20b0a6e
+DOCS_PASSWORD_HASH=240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9
 ```
 
 ### Setting via Docker:
 
 ```bash
 docker run -p 8080:8080 \
-  -e DOCS_EMAIL=admin@yourcompany.com \
-  -e DOCS_PASSWORD=SecureP@ssw0rd!2025 \
+  -e DOCS_EMAIL_HASH=your_email_hash \
+  -e DOCS_PASSWORD_HASH=your_password_hash \
   radiowsserver
 ```
 
@@ -41,7 +74,7 @@ docker run -p 8080:8080 \
 
 ```bash
 gcloud run deploy radiowsserver \
-  --set-env-vars DOCS_EMAIL=admin@yourcompany.com,DOCS_PASSWORD=SecureP@ssw0rd!2025
+  --set-env-vars DOCS_EMAIL_HASH=your_email_hash,DOCS_PASSWORD_HASH=your_password_hash
 ```
 
 ## Accessing Documentation

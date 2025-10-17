@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Test Hashed Auth</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 600px;
+        margin: 50px auto;
+        padding: 20px;
+      }
+      .test-section {
+        border: 1px solid #ccc;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 5px;
+      }
+      button {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      button:hover {
+        background: #0056b3;
+      }
+      .success {
+        color: green;
+        font-weight: bold;
+      }
+      .error {
+        color: red;
+        font-weight: bold;
+      }
+      .result {
+        margin-top: 10px;
+        padding: 10px;
+        background: #f5f5f5;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Documentation Authentication Test</h1>
+    <p>Testing hashed email/password authentication</p>
+
+    <div class="test-section">
+      <h2>Test 1: Login with Correct Credentials</h2>
+      <p>Email: admin@radiows.local<br />Password: admin123</p>
+      <button onclick="testLogin('admin@radiows.local', 'admin123')">
+        Test Correct Login
+      </button>
+      <div id="result1" class="result"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>Test 2: Login with Wrong Password</h2>
+      <p>Email: admin@radiows.local<br />Password: wrongpassword</p>
+      <button
+        onclick="testLogin('admin@radiows.local', 'wrongpassword', 'result2')"
+      >
+        Test Wrong Password
+      </button>
+      <div id="result2" class="result"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>Test 3: Login with Wrong Email</h2>
+      <p>Email: wrong@email.com<br />Password: admin123</p>
+      <button onclick="testLogin('wrong@email.com', 'admin123', 'result3')">
+        Test Wrong Email
+      </button>
+      <div id="result3" class="result"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>Test 4: Access Protected /docs</h2>
+      <p>Try to access /docs after successful login</p>
+      <button onclick="testDocsAccess()">Test /docs Access</button>
+      <div id="result4" class="result"></div>
+    </div>
+
+    <script>
+      async function testLogin(email, password, resultId = "result1") {
+        const resultDiv = document.getElementById(resultId);
+        resultDiv.innerHTML = "Testing...";
+
+        try {
+          const response = await fetch(
+            "http://localhost:8080/auth/docs-login",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ email, password }),
+              credentials: "include",
+            }
+          );
+
+          const data = await response.json();
+
+          if (response.ok && data.success) {
+            resultDiv.innerHTML = `<span class="success">✅ SUCCESS</span><br>
+                        Message: ${data.message}<br>
+                        Token received: ${data.token ? "Yes" : "No"}`;
+
+            // Store token for later tests
+            if (data.token) {
+              sessionStorage.setItem("docsToken", data.token);
+            }
+          } else {
+            resultDiv.innerHTML = `<span class="error">❌ FAILED</span><br>
+                        Message: ${data.message || "Unknown error"}`;
+          }
+        } catch (error) {
+          resultDiv.innerHTML = `<span class="error">❌ ERROR</span><br>
+                    ${error.message}`;
+        }
+      }
+
+      async function testDocsAccess() {
+        const resultDiv = document.getElementById("result4");
+        resultDiv.innerHTML = "Testing...";
+
+        const token = sessionStorage.getItem("docsToken");
+        if (!token) {
+          resultDiv.innerHTML = `<span class="error">❌ ERROR</span><br>
+                    No token found. Please run Test 1 first.`;
+          return;
+        }
+
+        try {
+          const response = await fetch("http://localhost:8080/docs", {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            credentials: "include",
+          });
+
+          if (response.ok) {
+            const text = await response.text();
+            const hasSwagger = text.includes("swagger");
+            resultDiv.innerHTML = `<span class="success">✅ SUCCESS</span><br>
+                        Status: ${response.status}<br>
+                        Content received: ${text.length} bytes<br>
+                        Contains Swagger UI: ${hasSwagger ? "Yes" : "No"}`;
+          } else {
+            resultDiv.innerHTML = `<span class="error">❌ FAILED</span><br>
+                        Status: ${response.status}<br>
+                        ${response.statusText}`;
+          }
+        } catch (error) {
+          resultDiv.innerHTML = `<span class="error">❌ ERROR</span><br>
+                    ${error.message}`;
+        }
+      }
+    </script>
+  </body>
+</html>
