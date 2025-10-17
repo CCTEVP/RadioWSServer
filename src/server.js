@@ -45,29 +45,43 @@ const PUBLIC_BASE_URL = (
 // Basic HTTP server (optional for health check / upgrade flexibility)
 const server = http.createServer(async (req, res) => {
   // Simple router
-  if (req.method === "GET" && req.url === "/health") {
+  if (req.method === "GET" && req.url.startsWith("/health")) {
+    // Parse query parameters
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const detailed = url.searchParams.get("detailed") === "true";
+
     const roomStats = {};
 
     // Gather room statistics from handlers
     for (const [roomName, clients] of rooms.entries()) {
       const handler = roomRegistry.getHandler(roomName);
-      const handlerStats = await handler.getRoomStats(clients);
-      roomStats[roomName] = {
-        ...handlerStats,
-        hasCustomHandler: roomRegistry.hasCustomHandler(roomName),
-      };
+
+      if (detailed) {
+        // Get detailed statistics with client information
+        const handlerStats = await handler.getRoomStats(clients);
+        roomStats[roomName] = {
+          ...handlerStats,
+          hasCustomHandler: roomRegistry.hasCustomHandler(roomName),
+        };
+      } else {
+        // Get minimal statistics (just counts)
+        roomStats[roomName] = {
+          clients: clients.size,
+          hasCustomHandler: roomRegistry.hasCustomHandler(roomName),
+        };
+      }
     }
 
+    const response = {
+      status: "ok",
+      uptime: process.uptime(),
+      clients: wss?.clients?.size || 0,
+      rooms: roomStats,
+      registeredHandlers: roomRegistry.getRegisteredRooms(),
+    };
+
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(
-      JSON.stringify({
-        status: "ok",
-        uptime: process.uptime(),
-        clients: wss?.clients?.size || 0,
-        rooms: roomStats,
-        registeredHandlers: roomRegistry.getRegisteredRooms(),
-      })
-    );
+    res.end(JSON.stringify(response));
     return;
   }
 

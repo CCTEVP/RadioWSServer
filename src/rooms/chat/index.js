@@ -73,6 +73,13 @@ export class ChatHandler extends BaseRoomHandler {
    * Process chat messages
    */
   async onMessage(payload, socket, clientAddress) {
+    // Update client activity tracking
+    if (socket.chatMetadata) {
+      socket.chatMetadata.lastActivity = Date.now();
+      socket.chatMetadata.messageCount =
+        (socket.chatMetadata.messageCount || 0) + 1;
+    }
+
     // Handle username setting
     if (payload.type === "setUsername") {
       if (payload.username && typeof payload.username === "string") {
@@ -141,15 +148,60 @@ export class ChatHandler extends BaseRoomHandler {
   }
 
   /**
-   * Enhanced room statistics
+   * Enhanced room statistics with detailed client info
    */
   async getRoomStats(clients) {
+    const clientDetails = [];
+
+    // Collect detailed information about each client
+    for (const client of clients) {
+      const userInfo = this.users.get(client);
+      const connectedTime =
+        Date.now() - (client.chatMetadata?.joinedAt || Date.now());
+      const connectedDuration = this.formatDuration(connectedTime);
+
+      clientDetails.push({
+        id: client.chatMetadata?.clientId || "unknown",
+        username: userInfo?.username || "No username set",
+        connected: connectedDuration,
+        joinedAt: client.chatMetadata?.joinedAt
+          ? new Date(client.chatMetadata.joinedAt).toISOString()
+          : null,
+        lastActivity: client.chatMetadata?.lastActivity
+          ? new Date(client.chatMetadata.lastActivity).toISOString()
+          : null,
+        messageCount: client.chatMetadata?.messageCount || 0,
+        clientAddress: client.chatMetadata?.clientAddress || "unknown",
+        userAgent: client.chatMetadata?.userAgent || "Unknown",
+      });
+    }
+
     return {
-      clients: clients.size,
+      clients: {
+        total: clients.size,
+        details: clientDetails,
+      },
       users: this.users.size,
       totalMessages: this.messageCount,
       userList: Array.from(this.users.values()).map((u) => u.username),
     };
+  }
+
+  /**
+   * Format duration in human-readable format
+   */
+  formatDuration(milliseconds) {
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
   }
 
   /**
@@ -158,6 +210,18 @@ export class ChatHandler extends BaseRoomHandler {
   async onJoin(socket, req, clientAddress, authPayload) {
     const clientId = authPayload?.clientId || clientAddress;
     console.log(`[Chat] Client ${clientId} connected (no username yet)`);
+
+    // Attach detailed metadata to socket for this room
+    socket.chatMetadata = {
+      clientId: authPayload?.clientId || "anonymous",
+      joinedAt: Date.now(),
+      lastActivity: Date.now(),
+      messageCount: 0,
+      clientAddress: clientAddress,
+      userAgent: req.headers["user-agent"] || "Unknown",
+      metadata: authPayload?.metadata || {},
+    };
+
     socket.chatClientId = authPayload?.clientId;
     return true;
   }

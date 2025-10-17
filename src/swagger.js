@@ -159,22 +159,95 @@ export function generateSwaggerSpecs(baseUrl) {
               },
               clients: {
                 type: "number",
-                description: "Number of connected WebSocket clients",
-                example: 5,
+                description:
+                  "Total number of connected WebSocket clients across all rooms",
+                example: 10,
               },
               rooms: {
                 type: "object",
-                description: "Statistics for each room",
+                description: "Detailed statistics for each room",
                 additionalProperties: {
                   type: "object",
                   properties: {
                     clients: {
+                      type: "object",
+                      description: "Detailed client information",
+                      properties: {
+                        total: {
+                          type: "number",
+                          description: "Total number of clients in this room",
+                          example: 10,
+                        },
+                        details: {
+                          type: "array",
+                          description: "Array of connected client details",
+                          items: {
+                            type: "object",
+                            properties: {
+                              id: {
+                                type: "string",
+                                description:
+                                  "Client identifier from authentication token",
+                                example: "screen",
+                              },
+                              connected: {
+                                type: "string",
+                                description:
+                                  "Human-readable duration of connection",
+                                example: "2m 45s",
+                              },
+                              joinedAt: {
+                                type: "string",
+                                format: "date-time",
+                                description:
+                                  "ISO timestamp when client connected",
+                                example: "2025-10-17T08:00:00.000Z",
+                              },
+                              lastActivity: {
+                                type: "string",
+                                format: "date-time",
+                                description:
+                                  "ISO timestamp of last client activity",
+                                example: "2025-10-17T08:02:30.000Z",
+                              },
+                              messageCount: {
+                                type: "number",
+                                description:
+                                  "Number of messages sent by this client",
+                                example: 5,
+                              },
+                              clientAddress: {
+                                type: "string",
+                                description: "Client IP address and port",
+                                example: "192.168.1.100:54321",
+                              },
+                              userAgent: {
+                                type: "string",
+                                description: "Client user agent string",
+                                example: "Mozilla/5.0...",
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    contentHistorySize: {
                       type: "number",
-                      description: "Number of clients in this room",
+                      description:
+                        "Number of recent content items stored (radio room only)",
+                      example: 10,
+                    },
+                    lastContent: {
+                      type: "string",
+                      format: "date-time",
+                      description:
+                        "Timestamp of last content broadcast (radio room only)",
+                      example: "2025-10-17T08:02:36.157Z",
                     },
                     hasCustomHandler: {
                       type: "boolean",
                       description: "Whether the room has a custom handler",
+                      example: true,
                     },
                   },
                 },
@@ -229,7 +302,22 @@ export function generateSwaggerSpecs(baseUrl) {
             tags: ["Health"],
             summary: "Get server health status",
             description:
-              "Returns server status, uptime, connected clients, and room statistics",
+              "Returns server status, uptime, connected clients, and room statistics. Use ?detailed=true for comprehensive client information.",
+            parameters: [
+              {
+                name: "detailed",
+                in: "query",
+                required: false,
+                schema: {
+                  type: "string",
+                  enum: ["true", "false"],
+                  default: "false",
+                },
+                description:
+                  "When set to 'true', returns detailed client information including connection times, activity, and metadata. Default is minimal data for monitoring.",
+                example: "true",
+              },
+            ],
             responses: {
               200: {
                 description: "Server health information",

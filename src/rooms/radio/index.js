@@ -67,6 +67,13 @@ export class RadioHandler extends BaseRoomHandler {
    * Process radio messages
    */
   async onMessage(payload, socket, clientAddress) {
+    // Update client activity tracking
+    if (socket.radioMetadata) {
+      socket.radioMetadata.lastActivity = Date.now();
+      socket.radioMetadata.messageCount =
+        (socket.radioMetadata.messageCount || 0) + 1;
+    }
+
     // Add radio-specific metadata
     const enriched = {
       ...payload,
@@ -134,17 +141,70 @@ export class RadioHandler extends BaseRoomHandler {
   }
 
   /**
-   * Enhanced room statistics with content info
+   * Enhanced room statistics with detailed client info
    */
   async getRoomStats(clients) {
+    const clientDetails = [];
+
+    // Collect detailed information about each client
+    for (const client of clients) {
+      if (client.radioMetadata) {
+        const connectedTime = Date.now() - client.radioMetadata.joinedAt;
+        const connectedDuration = this.formatDuration(connectedTime);
+
+        clientDetails.push({
+          id: client.radioMetadata.clientId,
+          connected: connectedDuration,
+          joinedAt: new Date(client.radioMetadata.joinedAt).toISOString(),
+          lastActivity: client.radioMetadata.lastActivity
+            ? new Date(client.radioMetadata.lastActivity).toISOString()
+            : null,
+          messageCount: client.radioMetadata.messageCount || 0,
+          clientAddress: client.radioMetadata.clientAddress,
+          userAgent: client.radioMetadata.userAgent || "Unknown",
+        });
+      } else {
+        // Fallback for clients without metadata
+        clientDetails.push({
+          id: "unknown",
+          connected: "unknown",
+          joinedAt: null,
+          lastActivity: null,
+          messageCount: 0,
+          clientAddress: "unknown",
+          userAgent: "unknown",
+        });
+      }
+    }
+
     return {
-      clients: clients.size,
+      clients: {
+        total: clients.size,
+        details: clientDetails,
+      },
       contentHistorySize: this.contentHistory.length,
       lastContent:
         this.contentHistory.length > 0
           ? this.contentHistory[this.contentHistory.length - 1].timestamp
           : null,
     };
+  }
+
+  /**
+   * Format duration in human-readable format
+   */
+  formatDuration(milliseconds) {
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
   }
 
   /**
@@ -156,11 +216,16 @@ export class RadioHandler extends BaseRoomHandler {
       `[Radio] Client ${clientId} joined - ${this.contentHistory.length} items in history`
     );
 
-    // Attach custom data to socket for this room
+    // Attach detailed metadata to socket for this room
     socket.radioMetadata = {
-      clientId: authPayload?.clientId,
+      clientId: authPayload?.clientId || "anonymous",
       joinedAt: Date.now(),
+      lastActivity: Date.now(),
+      messageCount: 0,
       receivedCount: 0,
+      clientAddress: clientAddress,
+      userAgent: req.headers["user-agent"] || "Unknown",
+      metadata: authPayload?.metadata || {},
     };
 
     return true;
