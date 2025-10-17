@@ -57,11 +57,6 @@ export function generateSwaggerSpecs(baseUrl) {
                 description: "Room name the client wants to access",
                 example: "radio",
               },
-              expiresIn: {
-                type: "number",
-                description: "Token expiration time in milliseconds from now",
-                example: 86400000,
-              },
               metadata: {
                 type: "object",
                 description: "Additional metadata for the token",
@@ -254,7 +249,7 @@ export function generateSwaggerSpecs(baseUrl) {
             tags: ["Authentication"],
             summary: "Generate authentication token",
             description:
-              "Creates a new authentication token for accessing protected endpoints and WebSocket rooms",
+              "Creates a new authentication token for accessing protected endpoints and WebSocket rooms. Tokens expire automatically after 1 hour. For permanent access, trusted clients should use the hardcoded always-valid token.",
             requestBody: {
               required: true,
               content: {
@@ -377,6 +372,17 @@ export function generateSwaggerSpecs(baseUrl) {
                     },
                   },
                 },
+              },
+            },
+          },
+          options: {
+            tags: ["Radio Content"],
+            summary: "CORS preflight for radio post endpoint",
+            description:
+              "Handles CORS preflight requests for the radio content posting endpoint",
+            responses: {
+              204: {
+                description: "CORS preflight successful",
               },
             },
           },

@@ -144,24 +144,21 @@ const server = http.createServer(async (req, res) => {
               error: "clientId and room are required",
               example: {
                 clientId: "user123",
-                room: "radioContent",
-                expiresIn: 86400000,
+                room: "radio",
               },
             })
           );
           return;
         }
 
-        const expiresAt = data.expiresIn
-          ? Date.now() + data.expiresIn
-          : Date.now() + AuthConfig.DEFAULT_EXPIRY;
-
         const token = generateAuthToken({
           clientId: data.clientId,
           room: data.room,
-          expiresAt,
           metadata: data.metadata || {},
         });
+
+        // Calculate expiration (1 hour from now)
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
         res.writeHead(200, {
           "Content-Type": "application/json",
@@ -172,7 +169,7 @@ const server = http.createServer(async (req, res) => {
             token,
             clientId: data.clientId,
             room: data.room,
-            expiresAt: new Date(expiresAt).toISOString(),
+            expiresAt: expiresAt.toISOString(),
           })
         );
       } catch (err) {
@@ -218,6 +215,19 @@ const server = http.createServer(async (req, res) => {
   // ============================================================================
   // END BACKWARD COMPATIBILITY
   // ============================================================================
+
+  // OPTIONS for room-based routing (CORS preflight)
+  // Handle preflight requests for /room/:roomName/:path endpoints
+  const roomOptionsMatch = req.url.match(/^\/room\/([^\/]+)(\/[^\/]+.*)$/);
+  if (req.method === "OPTIONS" && roomOptionsMatch) {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    });
+    res.end();
+    return;
+  }
 
   // Room-based routing ONLY: /room/:roomName/:path
   // Examples: /room/radio/post, /room/chat/messages

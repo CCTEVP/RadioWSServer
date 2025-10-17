@@ -35,7 +35,6 @@ if (!process.env.AUTH_SECRET) {
  * @param {Object} payload - Client data to embed in token
  * @param {string} payload.clientId - Unique client identifier
  * @param {string} payload.room - Room name the client wants to access
- * @param {number} payload.expiresAt - Expiration timestamp (optional)
  * @param {Object} payload.metadata - Additional metadata (optional)
  * @returns {string} Secure token
  */
@@ -44,8 +43,8 @@ export function generateAuthToken(payload) {
     throw new Error("clientId and room are required");
   }
 
-  // Add expiration if not provided (default: 24 hours)
-  const expiresAt = payload.expiresAt || Date.now() + 24 * 60 * 60 * 1000;
+  // Default expiration: 1 hour from now
+  const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour
 
   const tokenData = {
     clientId: payload.clientId,
@@ -217,7 +216,7 @@ export function generateClientId(identifier) {
  */
 export const AuthConfig = {
   // Token expiration times
-  DEFAULT_EXPIRY: 24 * 60 * 60 * 1000, // 24 hours
+  DEFAULT_EXPIRY: 60 * 60 * 1000, // 1 hour (new default)
   SHORT_EXPIRY: 60 * 60 * 1000, // 1 hour
   LONG_EXPIRY: 7 * 24 * 60 * 60 * 1000, // 7 days
 
@@ -239,7 +238,6 @@ export function createTokenForClient(clientId, room, options = {}) {
   return generateAuthToken({
     clientId,
     room,
-    expiresAt: options.expiresAt || Date.now() + AuthConfig.DEFAULT_EXPIRY,
     metadata: options.metadata || {},
   });
 }
