@@ -12,6 +12,60 @@ export class RadioHandler extends BaseRoomHandler {
     this.contentHistory = []; // Store recent content for new joiners
     this.maxHistorySize = 10;
     this.requiresAuth = true; // Enforce authentication
+    this.lastKnownDurationMs = null;
+    this.lastControlSnapshot = null;
+    this.radioPostBroadcastDelaySeconds = this.resolveBroadcastDelaySeconds();
+  }
+
+  async getBroadcastDelay(context) {
+    const isPostMessage = [context?.processed?.type, context?.original?.type]
+      .filter((value) => typeof value === "string")
+      .some((value) => value.toLowerCase() === "post");
+
+    if (!isPostMessage) {
+      return 0;
+    }
+
+    if (!Number.isFinite(this.radioPostBroadcastDelaySeconds)) {
+      this.radioPostBroadcastDelaySeconds = this.resolveBroadcastDelaySeconds();
+    }
+
+    if (!Number.isFinite(this.radioPostBroadcastDelaySeconds)) {
+      return 0;
+    }
+
+    return Math.max(0, this.radioPostBroadcastDelaySeconds) * 1000;
+  }
+
+  parseBroadcastDelaySeconds(value) {
+    if (value === undefined || value === null || value === "") {
+      return 0;
+    }
+
+    if (typeof value === "number") {
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    }
+
+    if (typeof value === "string") {
+      const parsed = Number.parseFloat(value.trim());
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    }
+
+    return 0;
+  }
+
+  resolveBroadcastDelaySeconds() {
+    const envValue =
+      process.env.RADIO_POST_BROADCAST_DELAY_SECONDS ||
+      process.env.POST_BROADCAST_DELAY_SECONDS ||
+      process.env.RADIO_BROADCAST_DELAY_SECONDS;
+
+    const parsed = this.parseBroadcastDelaySeconds(envValue);
+    if (parsed > 0) {
+      return parsed;
+    }
+
+    return 30;
   }
 
   /**
@@ -209,6 +263,191 @@ export class RadioHandler extends BaseRoomHandler {
   }
 
   /**
+   * Build standard control broadcast payload
+   */
+  buildControlBroadcastPayload(durationMs, roomName = this.roomName) {
+    const parsedMs =
+      typeof durationMs === "number"
+        ? durationMs
+        : Number.parseFloat(durationMs ?? "0");
+    const safeMs = Number.isFinite(parsedMs) ? parsedMs : 0;
+    const maxDurationSeconds = Math.max(
+      0,
+      Math.round(safeMs / 1000)
+    ).toString();
+
+    const formattedRoomName = this.formatRoomName(roomName);
+
+    return {
+      rc: {
+        version: "1",
+        id: "1",
+        action: "play_now",
+        name: formattedRoomName,
+        "max-duration": maxDurationSeconds,
+      },
+    };
+  }
+
+  formatRoomName(roomName) {
+    if (!roomName || typeof roomName !== "string") {
+      return "RoomContent";
+    }
+
+    if (roomName.length === 1) {
+      return `${roomName.toUpperCase()}Content`;
+    }
+
+    return `${roomName[0].toUpperCase()}${roomName.slice(1)}Content`;
+  }
+
+  parseDuration(value, multiplier = 1) {
+    if (value === undefined || value === null) return null;
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value * multiplier : null;
+    }
+    if (typeof value === "string" && value.trim().length > 0) {
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed * multiplier : null;
+    }
+    return null;
+  }
+
+  recursiveFindDuration(source, visited = new Set()) {
+    if (!source || typeof source !== "object") {
+      return null;
+    }
+
+    if (visited.has(source)) {
+      return null;
+    }
+    visited.add(source);
+
+    const direct = this.parseDuration(source.expectedSlotDurationMs);
+    if (direct !== null) return direct;
+
+    const secondsCandidates = [
+      source.expectedSlotDurationSeconds,
+      source.maxDurationSeconds,
+      source.durationSeconds,
+    ];
+    for (const candidate of secondsCandidates) {
+      const parsedSeconds = this.parseDuration(candidate, 1000);
+      if (parsedSeconds !== null) return parsedSeconds;
+    }
+
+    if (Array.isArray(source)) {
+      for (const item of source) {
+        const nested = this.recursiveFindDuration(item, visited);
+        if (nested !== null) return nested;
+      }
+      return null;
+    }
+
+    for (const [key, value] of Object.entries(source)) {
+      if (value === null || value === undefined) {
+        continue;
+      }
+
+      if (typeof value === "object") {
+        const nested = this.recursiveFindDuration(value, visited);
+        if (nested !== null) return nested;
+      } else if (
+        (typeof value === "number" || typeof value === "string") &&
+        /duration/i.test(key)
+      ) {
+        const keyLower = key.toLowerCase();
+        const hasMsHint = /ms|millisecond/.test(keyLower);
+        const hasSecondsHint = /second/.test(keyLower);
+        const numericValue =
+          typeof value === "number" ? value : Number.parseFloat(value ?? "NaN");
+        let multiplier = 1;
+
+        if (hasSecondsHint || (!hasMsHint && keyLower.includes("duration"))) {
+          multiplier = 1000;
+          if (Number.isFinite(numericValue) && numericValue >= 1000) {
+            multiplier = 1;
+          }
+        }
+
+        const parsed = this.parseDuration(value, multiplier);
+        if (parsed !== null) return parsed;
+      }
+    }
+
+    return null;
+  }
+
+  extractDurationFromSource(source) {
+    if (!source || typeof source !== "object") return null;
+
+    const direct = this.parseDuration(source.expectedSlotDurationMs);
+    if (direct !== null) return direct;
+
+    if (source.metadata && typeof source.metadata === "object") {
+      const fromMetadata = this.parseDuration(
+        source.metadata.expectedSlotDurationMs
+      );
+      if (fromMetadata !== null) return fromMetadata;
+    }
+
+    if (source.data && typeof source.data === "object") {
+      const fromData = this.parseDuration(source.data.expectedSlotDurationMs);
+      if (fromData !== null) return fromData;
+    }
+
+    const recursive = this.recursiveFindDuration(source);
+    if (recursive !== null) return recursive;
+
+    return null;
+  }
+
+  resolveDurationMs(context) {
+    const candidates = [
+      this.extractDurationFromSource(context.processed),
+      this.extractDurationFromSource(context.original),
+      this.extractDurationFromSource(context.socket?.radioMetadata),
+    ];
+
+    for (const candidate of candidates) {
+      if (candidate !== null) return candidate;
+    }
+
+    const socketDuration = this.parseDuration(
+      context.socket?.radioMetadata?.metadata?.expectedSlotDurationMs
+    );
+    if (socketDuration !== null) return socketDuration;
+
+    const authDuration = this.parseDuration(
+      context.authPayload?.metadata?.expectedSlotDurationMs
+    );
+    if (authDuration !== null) return authDuration;
+
+    return null;
+  }
+
+  async getControlPayload(context) {
+    const roomName = context.roomName || this.roomName;
+
+    if (!context.original && !context.processed && this.lastControlSnapshot) {
+      return this.lastControlSnapshot;
+    }
+
+    let durationMs = this.resolveDurationMs(context);
+    if (durationMs !== null) {
+      this.lastKnownDurationMs = durationMs;
+    } else if (this.lastKnownDurationMs !== null) {
+      durationMs = this.lastKnownDurationMs;
+    } else {
+      return null;
+    }
+
+    const payload = this.buildControlBroadcastPayload(durationMs, roomName);
+    this.lastControlSnapshot = JSON.parse(JSON.stringify(payload));
+    return payload;
+  }
+
+  /**
    * Format duration in human-readable format
    */
   formatDuration(milliseconds) {
@@ -251,6 +490,8 @@ export class RadioHandler extends BaseRoomHandler {
     if (playerId) queryMetadata.playerId = playerId;
     if (expectedSlotDurationMs)
       queryMetadata.expectedSlotDurationMs = expectedSlotDurationMs;
+    const broadcastDelay = url.searchParams.get("broadcastDelay");
+    if (broadcastDelay) queryMetadata.broadcastDelay = broadcastDelay;
 
     // Merge metadata: query parameters override token metadata
     const combinedMetadata = {
@@ -268,6 +509,7 @@ export class RadioHandler extends BaseRoomHandler {
       clientAddress: clientAddress,
       userAgent: req.headers["user-agent"] || "Unknown",
       metadata: combinedMetadata,
+      broadcastDelaySeconds: this.radioPostBroadcastDelaySeconds,
     };
 
     return true;
@@ -306,7 +548,4 @@ export class RadioHandler extends BaseRoomHandler {
       this.contentHistory = this.contentHistory.slice(-this.maxHistorySize);
     }
   }
-
-  // Uses generic routes from BaseRoomHandler (src/rooms/routes.js)
-  // Override getRoutes() here if you need radio-specific custom routes
 }

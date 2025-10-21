@@ -118,6 +118,18 @@ export function verifyAuthToken(token, expectedRoom = null) {
           issuedAt: 1760521566464,
         },
       },
+      // Monitor role - for monitoring clients
+      monitor: {
+        token:
+          "eyJjbGllbnRJZCI6Im1vbml0b3IiLCJyb29tIjoicmFkaW8iLCJleHBpcmVzQXQiOjQ5MTQxMjE1NjY0NjQsIm1ldGFkYXRhIjp7InJvbGUiOiJtb25pdG9yIiwidmFsaWRpdHkiOiJObyBleHBpcmF0aW9uIn0sImlzc3VlZEF0IjoxNzYwNTIxNTY2NDY0fQ.5f5owqdr4j3gRD0UtiZLTYI_Du4Sa9XtRNN84B0fat4",
+        payload: {
+          clientId: "monitor",
+          room: "radio",
+          expiresAt: 4914121566464,
+          metadata: { role: "monitor", validity: "No expiration" },
+          issuedAt: 1760521566464,
+        },
+      },
     };
 
     // Check if token matches any of the hardcoded tokens

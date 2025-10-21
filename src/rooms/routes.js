@@ -19,7 +19,9 @@ export async function handlePost(
   res,
   authPayload,
   handler,
-  broadcastToRoom
+  broadcastToRoom,
+  broadcastToControlRoom,
+  enqueueRoomBroadcast
 ) {
   const MAX_POST_BYTES = parseInt(
     process.env.POST_CONTENT_MAX_BYTES || "262144",
@@ -110,8 +112,36 @@ export async function handlePost(
       broadcastPayload = handlerResult;
     }
 
-    // Broadcast to clients in the specified room
-    const delivered = broadcastToRoom(handler.roomName, broadcastPayload);
+    const broadcastContext = {
+      type: "http",
+      original: body,
+      processed: broadcastPayload,
+      authPayload,
+      roomName: handler.roomName,
+    };
+
+    const broadcastDelay = await handler.getBroadcastDelay(broadcastContext);
+
+    let delivered = 0;
+    const broadcastPromise = enqueueRoomBroadcast(
+      handler.roomName,
+      broadcastDelay,
+      async () => {
+        delivered = broadcastToRoom(handler.roomName, broadcastPayload);
+
+        if (typeof broadcastToControlRoom === "function") {
+          const controlPayload = await handler.getControlPayload(
+            broadcastContext
+          );
+
+          if (controlPayload) {
+            broadcastToControlRoom(handler.roomName, controlPayload);
+          }
+        }
+      }
+    );
+
+    await broadcastPromise;
 
     res.writeHead(200, {
       "Content-Type": "application/json",

@@ -8,6 +8,7 @@ export class BaseRoomHandler {
   constructor(roomName) {
     this.roomName = roomName;
     this.requiresAuth = true; // By default, all rooms require authentication
+    this.broadcastDelay = 0; // Default delay before broadcasting (ms)
   }
 
   /**
@@ -68,6 +69,26 @@ export class BaseRoomHandler {
   async onLeave(socket, clientAddress, code, reason) {
     console.log(
       `[${this.roomName}] Client ${clientAddress} left (code: ${code})`
+    );
+  }
+
+  /**
+   * Called when a control-channel client joins this room
+   * Override for custom behavior (default: allow)
+   */
+  async onControlJoin(socket, req, clientAddress) {
+    console.log(
+      `[${this.roomName}] Control client ${clientAddress} joined control channel`
+    );
+    return true;
+  }
+
+  /**
+   * Called when a control-channel client leaves this room
+   */
+  async onControlLeave(socket, clientAddress, code, reason) {
+    console.log(
+      `[${this.roomName}] Control client ${clientAddress} left control channel (code: ${code})`
     );
   }
 
@@ -152,5 +173,29 @@ export class BaseRoomHandler {
     // Default: load generic routes that work for all rooms
     const { routes } = await import("./routes.js");
     return routes;
+  }
+
+  /**
+   * Build a control-channel payload for this room.
+   * Return null to send nothing for the given context.
+   * @param {Object} _context - Metadata about the triggering event
+   * @returns {Object|null}
+   */
+  async getControlPayload(_context) {
+    return null;
+  }
+
+  /**
+   * Get delay (in ms) before broadcasting a processed message.
+   * Override to provide dynamic delays per context.
+   * @param {Object} _context - Metadata about the triggering event
+   * @returns {number|Promise<number>}
+   */
+  async getBroadcastDelay(_context) {
+    const parsed = Number(this.broadcastDelay);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 0;
+    }
+    return parsed;
   }
 }

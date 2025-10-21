@@ -387,11 +387,21 @@ const server = http.createServer(async (req, res) => {
             res,
             authPayload,
             handler,
-            broadcastToRoom
+            broadcastToRoom,
+            broadcastToControlRoom,
+            enqueueRoomBroadcast
           );
         } else {
           // Call the route handler without auth
-          await matchingRoute.handler(req, res, null, handler, broadcastToRoom);
+          await matchingRoute.handler(
+            req,
+            res,
+            null,
+            handler,
+            broadcastToRoom,
+            broadcastToControlRoom,
+            enqueueRoomBroadcast
+          );
         }
         return;
       }
@@ -428,6 +438,8 @@ const wss = new WebSocketServer({ server, maxPayload: MAX_PAYLOAD_BYTES });
 
 // Room management: Maps room name to Set of WebSocket clients
 const rooms = new Map();
+const controlRooms = new Map();
+const roomBroadcastQueues = new Map();
 
 // Helper to get or create a room
 function getRoom(roomName) {
@@ -435,6 +447,13 @@ function getRoom(roomName) {
     rooms.set(roomName, new Set());
   }
   return rooms.get(roomName);
+}
+
+function getControlRoom(roomName) {
+  if (!controlRooms.has(roomName)) {
+    controlRooms.set(roomName, new Set());
+  }
+  return controlRooms.get(roomName);
 }
 
 // Helper to add client to room with handler support
@@ -490,6 +509,53 @@ async function leaveRoom(socket, code, reason, clientAddress) {
   }
 }
 
+async function joinControlRoom(socket, roomName, req, clientAddress, handler) {
+  const room = getControlRoom(roomName);
+  const joinResult = await handler.onControlJoin(socket, req, clientAddress);
+
+  if (joinResult === false) {
+    return false;
+  }
+
+  room.add(socket);
+  socket.currentRoom = roomName;
+  socket.controlHandler = handler;
+  socket.isControlChannel = true;
+  console.log(
+    `Remote control client joined: ${roomName} (${room.size} subscribers) - ${clientAddress}`
+  );
+  return true;
+}
+
+async function leaveControlRoom(socket, code, reason, clientAddress) {
+  if (socket.currentRoom) {
+    const room = controlRooms.get(socket.currentRoom);
+    if (room) {
+      room.delete(socket);
+
+      if (socket.controlHandler) {
+        await socket.controlHandler.onControlLeave(
+          socket,
+          clientAddress,
+          code,
+          reason
+        );
+      }
+
+      console.log(
+        `Remote control client left: ${socket.currentRoom} (${room.size} subscribers)`
+      );
+
+      if (room.size === 0) {
+        controlRooms.delete(socket.currentRoom);
+      }
+    }
+    socket.currentRoom = null;
+    socket.controlHandler = null;
+    socket.isControlChannel = false;
+  }
+}
+
 // Helper to broadcast to room
 function broadcastToRoom(roomName, message, excludeSocket = null) {
   const room = rooms.get(roomName);
@@ -503,6 +569,80 @@ function broadcastToRoom(roomName, message, excludeSocket = null) {
     }
   });
   return delivered;
+}
+
+function broadcastToControlRoom(roomName, message) {
+  const room = controlRooms.get(roomName);
+  if (!room) return 0;
+
+  let delivered = 0;
+  room.forEach((client) => {
+    if (client.readyState === client.OPEN) {
+      sendJson(client, message);
+      delivered++;
+    }
+  });
+  return delivered;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function enqueueRoomBroadcast(roomName, delayMs, taskFn) {
+  const effectiveDelay = Math.max(0, Number(delayMs) || 0);
+
+  if (!roomBroadcastQueues.has(roomName)) {
+    roomBroadcastQueues.set(roomName, {
+      queue: [],
+      processing: false,
+    });
+  }
+
+  const state = roomBroadcastQueues.get(roomName);
+  let settle;
+  const completion = new Promise((resolve) => {
+    settle = resolve;
+  });
+
+  state.queue.push({ delayMs: effectiveDelay, taskFn, settle });
+
+  if (!state.processing) {
+    void processRoomBroadcastQueue(roomName, state);
+  }
+
+  return completion;
+}
+
+async function processRoomBroadcastQueue(roomName, state) {
+  state.processing = true;
+
+  while (state.queue.length > 0) {
+    const { delayMs, taskFn, settle } = state.queue.shift();
+    try {
+      if (delayMs > 0) {
+        await delay(delayMs);
+      }
+      await taskFn();
+    } catch (err) {
+      console.error(
+        "Failed to process broadcast task",
+        roomName,
+        err && err.stack ? err.stack : err
+      );
+    } finally {
+      try {
+        settle();
+      } catch (_) {
+        /* ignore settle errors */
+      }
+    }
+  }
+
+  state.processing = false;
+  if (state.queue.length === 0) {
+    roomBroadcastQueues.delete(roomName);
+  }
 }
 
 // Extract client address (respect Cloud Run / proxy headers)
@@ -568,6 +708,7 @@ wss.on("connection", async (socket, req) => {
   socket.isAlive = true; // initial state for heartbeat
   let lastActivity = Date.now();
   const clientAddress = getClientAddress(req);
+  socket.isControlChannel = false;
 
   // Basic origin check AFTER upgrade (lightweight; for stricter security use custom upgrade handling)
   const origin = req.headers.origin;
@@ -592,6 +733,7 @@ wss.on("connection", async (socket, req) => {
   // Check path first
   const pathname = url.pathname;
   console.log(`🔍 WebSocket connection attempt - pathname: ${pathname}`);
+  const isControlChannel = /^\/rooms\/[^\/]+\/remotecontrol\/?$/.test(pathname);
 
   // 1. Try /rooms/:roomName pattern (preferred)
   const roomPrefixMatch = pathname.match(/^\/rooms\/([^\/]+)/);
@@ -633,56 +775,71 @@ wss.on("connection", async (socket, req) => {
   if (token) {
     authPayload = verifyAuthToken(token, roomName);
     if (!authPayload) {
+      if (isControlChannel) {
+        console.warn(
+          "Control channel provided invalid token (ignored)",
+          clientAddress,
+          roomName
+        );
+      } else {
+        console.warn(
+          "Connection rejected: Invalid token",
+          clientAddress,
+          roomName
+        );
+        try {
+          socket.close(
+            AuthConfig.ERRORS.INVALID_TOKEN,
+            "Invalid or expired token"
+          );
+        } catch (_) {}
+        return;
+      }
+    }
+  }
+
+  // Get room handler and verify authentication
+  const roomHandler = roomRegistry.getHandler(roomName);
+  if (!isControlChannel) {
+    const authResult = await roomHandler.verifyAuth(
+      authPayload,
+      req,
+      clientAddress
+    );
+
+    if (authResult && authResult.reject) {
       console.warn(
-        "Connection rejected: Invalid token",
+        "Connection rejected by auth:",
+        authResult.reason,
         clientAddress,
         roomName
       );
       try {
         socket.close(
-          AuthConfig.ERRORS.INVALID_TOKEN,
-          "Invalid or expired token"
+          authResult.code || AuthConfig.ERRORS.INVALID_TOKEN,
+          authResult.reason
         );
       } catch (_) {}
       return;
     }
   }
 
-  // Get room handler and verify authentication
-  const roomHandler = roomRegistry.getHandler(roomName);
-  const authResult = await roomHandler.verifyAuth(
-    authPayload,
-    req,
-    clientAddress
-  );
-
-  if (authResult && authResult.reject) {
-    console.warn(
-      "Connection rejected by auth:",
-      authResult.reason,
-      clientAddress,
-      roomName
-    );
-    try {
-      socket.close(
-        authResult.code || AuthConfig.ERRORS.INVALID_TOKEN,
-        authResult.reason
-      );
-    } catch (_) {}
-    return;
-  }
-
   // Store auth payload on socket
   socket.authPayload = authPayload;
 
   // Join the specified room (with handler support)
-  const joined = await joinRoom(
-    socket,
-    roomName,
-    req,
-    clientAddress,
-    authPayload
-  );
+  let joined = false;
+  if (isControlChannel) {
+    joined = await joinControlRoom(
+      socket,
+      roomName,
+      req,
+      clientAddress,
+      roomHandler
+    );
+  } else {
+    joined = await joinRoom(socket, roomName, req, clientAddress, authPayload);
+  }
 
   if (!joined) {
     console.warn("Client rejected by room handler", clientAddress, roomName);
@@ -696,6 +853,7 @@ wss.on("connection", async (socket, req) => {
     "Client connected",
     clientAddress,
     `room=${roomName}`,
+    isControlChannel ? "channel=remotecontrol" : "",
     origin ? `origin=${origin}` : ""
   );
 
@@ -705,18 +863,32 @@ wss.on("connection", async (socket, req) => {
     lastActivity = Date.now();
   });
 
-  // Get custom welcome message from handler
-  const handler = roomRegistry.getHandler(roomName);
-  const customWelcome = await handler.getWelcomeMessage(socket);
+  if (isControlChannel) {
+    const controlRoomMatch = pathname.match(
+      /^\/rooms\/([^\/]+)\/remotecontrol\/?$/
+    );
+    if (controlRoomMatch) {
+      roomName = controlRoomMatch[1];
+      console.log(`✅ Control channel matched for room: ${roomName}`);
+    }
+    sendJson(socket, {
+      type: "control-welcome",
+      message: "Connected to remote control channel",
+      room: roomName,
+      time: Date.now(),
+    });
+  } else {
+    const customWelcome = await roomHandler.getWelcomeMessage(socket);
 
-  const welcomeMessage = customWelcome || {
-    type: "welcome",
-    message: "Connected to broadcast server",
-    room: roomName,
-    time: Date.now(),
-  };
+    const welcomeMessage = customWelcome || {
+      type: "welcome",
+      message: "Connected to broadcast server",
+      room: roomName,
+      time: Date.now(),
+    };
 
-  sendJson(socket, welcomeMessage);
+    sendJson(socket, welcomeMessage);
+  }
 
   // Idle timeout watcher (per connection) if enabled
   if (IDLE_TIMEOUT_MS > 0) {
@@ -739,6 +911,22 @@ wss.on("connection", async (socket, req) => {
 
   // Whenever you process a real message, update activity time
   socket.on("message", async (data, isBinary) => {
+    if (socket.isControlChannel) {
+      if (!socket.controlWriteWarningSent) {
+        console.warn(
+          "Control channel message ignored (channel is read-only)",
+          clientAddress,
+          socket.currentRoom
+        );
+        sendJson(socket, {
+          type: "error",
+          error: "Control channel is receive-only",
+        });
+        socket.controlWriteWarningSent = true;
+      }
+      return;
+    }
+
     lastActivity = Date.now();
     // Accept text or binary but expect JSON when text
     if (isBinary) {
@@ -823,19 +1011,45 @@ wss.on("connection", async (socket, req) => {
       };
     }
 
-    // Broadcast to other clients in the same room only
-    broadcastToRoom(socket.currentRoom, enriched, socket);
+    const broadcastContext = {
+      type: "websocket",
+      original: payload,
+      processed: enriched.data,
+      socket,
+      authPayload: socket.authPayload,
+      roomName: socket.currentRoom,
+    };
+
+    const broadcastDelay = await handler.getBroadcastDelay(broadcastContext);
+
+    enqueueRoomBroadcast(socket.currentRoom, broadcastDelay, async () => {
+      // Broadcast to other clients in the same room only
+      broadcastToRoom(socket.currentRoom, enriched, socket);
+
+      const controlPayload = await handler.getControlPayload(broadcastContext);
+
+      if (controlPayload) {
+        broadcastToControlRoom(socket.currentRoom, controlPayload);
+      }
+    });
   });
 
   socket.on("close", async (code, reason) => {
-    await leaveRoom(socket, code, reason.toString(), clientAddress);
+    const wasControl = socket.isControlChannel;
+    const reasonText = reason.toString();
+    if (wasControl) {
+      await leaveControlRoom(socket, code, reasonText, clientAddress);
+    } else {
+      await leaveRoom(socket, code, reasonText, clientAddress);
+    }
     console.log(
       "Client disconnected",
       clientAddress,
+      wasControl ? "channel=remotecontrol" : "",
       "code=",
       code,
       "reason=",
-      reason.toString()
+      reasonText
     );
   });
 
