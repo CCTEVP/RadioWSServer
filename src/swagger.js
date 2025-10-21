@@ -328,7 +328,7 @@ export function generateSwaggerSpecs(baseUrl) {
                   default: "false",
                 },
                 description:
-                  "When set to 'true', returns detailed client information including connection times, activity, and metadata. Default is minimal data for monitoring.",
+                  "Enable detailed client information (accepted values: true, 1, yes). Omit or use any other value for minimal response.",
                 example: "true",
               },
             ],

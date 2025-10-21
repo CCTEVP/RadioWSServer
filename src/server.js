@@ -29,6 +29,7 @@ import {
   destroySession,
   getDocsCredentials,
 } from "./auth/docs-auth.js";
+import { handleHealthRequest, isHealthRequest } from "./health/index.js";
 import { readFileSync } from "fs";
 
 const PORT = process.env.PORT || 8080;
@@ -60,43 +61,9 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && req.url.startsWith("/health")) {
-    // Parse query parameters
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const detailed = url.searchParams.get("detailed") === "true";
-
-    const roomStats = {};
-
-    // Gather room statistics from handlers
-    for (const [roomName, clients] of rooms.entries()) {
-      const handler = roomRegistry.getHandler(roomName);
-
-      if (detailed) {
-        // Get detailed statistics with client information
-        const handlerStats = await handler.getRoomStats(clients);
-        roomStats[roomName] = {
-          ...handlerStats,
-          hasCustomHandler: roomRegistry.hasCustomHandler(roomName),
-        };
-      } else {
-        // Get minimal statistics (just counts)
-        roomStats[roomName] = {
-          clients: clients.size,
-          hasCustomHandler: roomRegistry.hasCustomHandler(roomName),
-        };
-      }
-    }
-
-    const response = {
-      status: "ok",
-      uptime: process.uptime(),
-      clients: wss?.clients?.size || 0,
-      rooms: roomStats,
-      registeredHandlers: roomRegistry.getRegisteredRooms(),
-    };
-
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(response));
+  // Health check endpoint
+  if (isHealthRequest(req)) {
+    await handleHealthRequest(req, res, rooms, wss);
     return;
   }
 

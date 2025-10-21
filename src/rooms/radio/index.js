@@ -152,7 +152,7 @@ export class RadioHandler extends BaseRoomHandler {
         const connectedTime = Date.now() - client.radioMetadata.joinedAt;
         const connectedDuration = this.formatDuration(connectedTime);
 
-        clientDetails.push({
+        const clientInfo = {
           id: client.radioMetadata.clientId,
           connected: connectedDuration,
           joinedAt: new Date(client.radioMetadata.joinedAt).toISOString(),
@@ -162,7 +162,25 @@ export class RadioHandler extends BaseRoomHandler {
           messageCount: client.radioMetadata.messageCount || 0,
           clientAddress: client.radioMetadata.clientAddress,
           userAgent: client.radioMetadata.userAgent || "Unknown",
-        });
+        };
+
+        // Add Broadsign metadata if available
+        const metadata = client.radioMetadata.metadata || {};
+        if (
+          metadata.frameId ||
+          metadata.adCopyId ||
+          metadata.playerId ||
+          metadata.expectedSlotDurationMs
+        ) {
+          clientInfo.broadsign = {
+            frameId: metadata.frameId || "",
+            adCopyId: metadata.adCopyId || "",
+            playerId: metadata.playerId || "",
+            expectedSlotDurationMs: metadata.expectedSlotDurationMs || "",
+          };
+        }
+
+        clientDetails.push(clientInfo);
       } else {
         // Fallback for clients without metadata
         clientDetails.push({
@@ -216,6 +234,30 @@ export class RadioHandler extends BaseRoomHandler {
       `[Radio] Client ${clientId} joined - ${this.contentHistory.length} items in history`
     );
 
+    // Extract Broadsign metadata from query parameters (if provided)
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const queryMetadata = {};
+
+    // Check for Broadsign-specific query parameters
+    const frameId = url.searchParams.get("frameId");
+    const adCopyId = url.searchParams.get("adCopyId");
+    const playerId = url.searchParams.get("playerId");
+    const expectedSlotDurationMs = url.searchParams.get(
+      "expectedSlotDurationMs"
+    );
+
+    if (frameId) queryMetadata.frameId = frameId;
+    if (adCopyId) queryMetadata.adCopyId = adCopyId;
+    if (playerId) queryMetadata.playerId = playerId;
+    if (expectedSlotDurationMs)
+      queryMetadata.expectedSlotDurationMs = expectedSlotDurationMs;
+
+    // Merge metadata: query parameters override token metadata
+    const combinedMetadata = {
+      ...(authPayload?.metadata || {}),
+      ...queryMetadata,
+    };
+
     // Attach detailed metadata to socket for this room
     socket.radioMetadata = {
       clientId: authPayload?.clientId || "anonymous",
@@ -225,7 +267,7 @@ export class RadioHandler extends BaseRoomHandler {
       receivedCount: 0,
       clientAddress: clientAddress,
       userAgent: req.headers["user-agent"] || "Unknown",
-      metadata: authPayload?.metadata || {},
+      metadata: combinedMetadata,
     };
 
     return true;
