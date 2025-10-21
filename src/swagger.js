@@ -323,13 +323,13 @@ export function generateSwaggerSpecs(baseUrl) {
                 in: "query",
                 required: false,
                 schema: {
-                  type: "string",
-                  enum: ["true", "false"],
-                  default: "false",
+                  type: "boolean",
+                  default: false,
+                  nullable: true,
                 },
                 description:
-                  "Enable detailed client information (accepted values: true, 1, yes). Omit or use any other value for minimal response.",
-                example: "true",
+                  "Enable detailed client information (truthy values such as true, 1, yes are accepted). Leave empty (null) or false for minimal response.",
+                example: false,
               },
             ],
             responses: {
