@@ -623,16 +623,16 @@ async function processRoomBroadcastQueue(roomName, state) {
       if (delayMs > 0) {
         await delay(delayMs);
       }
-      await taskFn();
+      const result = await taskFn();
+      settle(result);
     } catch (err) {
       console.error(
         "Failed to process broadcast task",
         roomName,
         err && err.stack ? err.stack : err
       );
-    } finally {
       try {
-        settle();
+        settle(undefined);
       } catch (_) {
         /* ignore settle errors */
       }

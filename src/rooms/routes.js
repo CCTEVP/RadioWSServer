@@ -122,12 +122,15 @@ export async function handlePost(
 
     const broadcastDelay = await handler.getBroadcastDelay(broadcastContext);
 
-    let delivered = 0;
+    const scheduledAt = Date.now();
     const broadcastPromise = enqueueRoomBroadcast(
       handler.roomName,
       broadcastDelay,
       async () => {
-        delivered = broadcastToRoom(handler.roomName, broadcastPayload);
+        const deliveredCount = broadcastToRoom(
+          handler.roomName,
+          broadcastPayload
+        );
 
         if (typeof broadcastToControlRoom === "function") {
           const controlPayload = await handler.getControlPayload(
@@ -138,20 +141,30 @@ export async function handlePost(
             broadcastToControlRoom(handler.roomName, controlPayload);
           }
         }
+
+        return deliveredCount;
       }
     );
 
-    await broadcastPromise;
+    broadcastPromise.catch((err) => {
+      console.error(
+        "HTTP broadcast enqueue task failed",
+        handler.roomName,
+        err
+      );
+    });
 
-    res.writeHead(200, {
+    res.writeHead(202, {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
     });
     res.end(
       JSON.stringify({
-        status: "ok",
+        status: "queued",
         room: handler.roomName,
-        delivered,
+        delayMs: Math.max(0, broadcastDelay || 0),
+        scheduledAt,
+        broadcastPromise: true,
         echo: broadcastPayload,
       })
     );
