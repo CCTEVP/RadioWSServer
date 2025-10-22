@@ -440,6 +440,7 @@ const wss = new WebSocketServer({ server, maxPayload: MAX_PAYLOAD_BYTES });
 const rooms = new Map();
 const controlRooms = new Map();
 const roomBroadcastQueues = new Map();
+let broadcastSequence = 0;
 
 // Helper to get or create a room
 function getRoom(roomName) {
@@ -591,6 +592,7 @@ function delay(ms) {
 
 function enqueueRoomBroadcast(roomName, delayMs, taskFn) {
   const effectiveDelay = Math.max(0, Number(delayMs) || 0);
+  const scheduledAt = Date.now() + effectiveDelay;
 
   if (!roomBroadcastQueues.has(roomName)) {
     roomBroadcastQueues.set(roomName, {
@@ -605,7 +607,19 @@ function enqueueRoomBroadcast(roomName, delayMs, taskFn) {
     settle = resolve;
   });
 
-  state.queue.push({ delayMs: effectiveDelay, taskFn, settle });
+  state.queue.push({
+    scheduledAt,
+    sequence: broadcastSequence++,
+    taskFn,
+    settle,
+  });
+
+  state.queue.sort((a, b) => {
+    if (a.scheduledAt === b.scheduledAt) {
+      return a.sequence - b.sequence;
+    }
+    return a.scheduledAt - b.scheduledAt;
+  });
 
   if (!state.processing) {
     void processRoomBroadcastQueue(roomName, state);
@@ -618,10 +632,11 @@ async function processRoomBroadcastQueue(roomName, state) {
   state.processing = true;
 
   while (state.queue.length > 0) {
-    const { delayMs, taskFn, settle } = state.queue.shift();
+    const { scheduledAt, taskFn, settle } = state.queue.shift();
     try {
-      if (delayMs > 0) {
-        await delay(delayMs);
+      const waitMs = Math.max(0, scheduledAt - Date.now());
+      if (waitMs > 0) {
+        await delay(waitMs);
       }
       const result = await taskFn();
       settle(result);
