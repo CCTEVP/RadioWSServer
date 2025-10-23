@@ -26,6 +26,19 @@ export class RadioHandler extends BaseRoomHandler {
       return 0;
     }
 
+    // 1. Check for delay in payload (context.processed or context.original)
+    let delayValue =
+      context?.processed?.delay ??
+      context?.original?.delay ??
+      context?.processed?.data?.delay ??
+      context?.original?.data?.delay;
+
+    let delaySeconds = this.parseBroadcastDelaySeconds(delayValue);
+    if (delaySeconds > 0) {
+      return delaySeconds * 1000;
+    }
+
+    // 2. Fallback to env/config
     if (!Number.isFinite(this.radioPostBroadcastDelaySeconds)) {
       this.radioPostBroadcastDelaySeconds = this.resolveBroadcastDelaySeconds();
     }
@@ -55,17 +68,14 @@ export class RadioHandler extends BaseRoomHandler {
   }
 
   resolveBroadcastDelaySeconds() {
-    const envValue =
-      process.env.RADIO_POST_BROADCAST_DELAY_SECONDS ||
-      process.env.POST_BROADCAST_DELAY_SECONDS ||
-      process.env.RADIO_BROADCAST_DELAY_SECONDS;
+    const envValue = process.env.RADIO_POST_BROADCAST_DELAY_SECONDS || 0;
 
     const parsed = this.parseBroadcastDelaySeconds(envValue);
     if (parsed > 0) {
       return parsed;
     }
 
-    return 30;
+    return 0;
   }
 
   /**
